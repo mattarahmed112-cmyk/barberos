@@ -1,6 +1,8 @@
 // BarberOS with Firebase Realtime Database
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+// ⚠️ لا تغير أي حاجة هنا — Firebase متوصل بالفعل
+
+const { initializeApp } = FirebaseApp;
+const { getDatabase, ref, set, get, onValue, update, remove } = FirebaseDatabase;
 
 const firebaseConfig = {
   apiKey: "AIzaSyAU8SDcyWpl1dlDwa17JKxMpDazHib1Hpw",
@@ -25,33 +27,21 @@ const generateId = (existingIds) => {
 
 const getNow = () => {
   const now = new Date();
-  const cairoOffset = 2 * 60;
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  return new Date(utc + cairoOffset * 60000);
+  return new Date(utc + 2 * 60 * 60000);
 };
-const today = () => getNow().toISOString().slice(0, 10);
+const today     = () => getNow().toISOString().slice(0, 10);
 const thisMonth = () => getNow().toISOString().slice(0, 7);
-const getTime = () => getNow().toTimeString().slice(0, 5);
+const getTime   = () => getNow().toTimeString().slice(0, 5);
 
-// Firebase helpers
-const fbGet = async (path) => {
-  const snap = await get(ref(db, path));
-  return snap.exists() ? snap.val() : null;
-};
-const fbSet = (path, val) => set(ref(db, path), val);
-const fbUpdate = (path, val) => update(ref(db, path), val);
-
-// Storage wrapper using Firebase
-const storage = {
-  get: async (k) => await fbGet(k.replace(/\//g, "_")),
-  set: async (k, v) => await fbSet(k.replace(/\//g, "_"), v),
-};
+const fbGet    = async (path) => { const snap = await get(ref(db, path)); return snap.exists() ? snap.val() : null; };
+const fbSet    = (path, val)  => set(ref(db, path), val);
 
 const PAYMENT_METHODS = [
-  { id: "cash", label: "كاش", icon: "💵" },
-  { id: "vodafone", label: "Vodafone Cash", icon: "📱" },
-  { id: "instapay", label: "InstaPay", icon: "⚡" },
-  { id: "visa", label: "Visa / بطاقة", icon: "💳" },
+  { id: "cash",      label: "كاش",           icon: "💵" },
+  { id: "vodafone",  label: "Vodafone Cash",  icon: "📱" },
+  { id: "instapay",  label: "InstaPay",       icon: "⚡" },
+  { id: "visa",      label: "Visa / بطاقة",   icon: "💳" },
 ];
 
 // ===================== STYLES =====================
@@ -87,7 +77,7 @@ const css = `
   .remember-row input { width:16px; height:16px; cursor:pointer; accent-color:var(--gold); }
   .form-group { margin-bottom:18px; }
   .form-group label { display:block; font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
-  .form-group input, .form-group select, .form-group textarea { width:100%; padding:12px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; font-family:inherit; background:white; color:var(--text); transition:border-color 0.2s; outline:none; }
+  .form-group input, .form-group select { width:100%; padding:12px 14px; border:1.5px solid var(--border); border-radius:10px; font-size:14px; font-family:inherit; background:white; color:var(--text); transition:border-color 0.2s; outline:none; }
   .form-group input:focus, .form-group select:focus { border-color:var(--gold); }
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 24px; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; border:none; font-family:inherit; transition:all 0.2s; }
   .btn-primary { background:var(--charcoal); color:var(--gold); }
@@ -194,7 +184,6 @@ const css = `
   .payment-chip { padding:10px 14px; border-radius:10px; font-size:13px; background:var(--cream2); cursor:pointer; border:1.5px solid transparent; transition:all 0.15s; display:flex; align-items:center; gap:8px; font-weight:500; }
   .payment-chip.selected { background:var(--gold-light); border-color:var(--gold); color:#7a5c10; }
   .datetime-badge { background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.3); border-radius:10px; padding:8px 14px; font-size:13px; color:var(--gold); font-weight:600; display:inline-flex; align-items:center; gap:6px; }
-  .suspended-banner { background:#fdecea; border:1px solid #f5c6cb; color:var(--red); padding:14px 20px; border-radius:12px; text-align:center; font-weight:600; margin-bottom:20px; }
   .service-summary { background:var(--cream2); border-radius:10px; padding:14px 16px; margin-top:8px; }
   .service-summary-row { display:flex; justify-content:space-between; font-size:13px; padding:3px 0; }
   .service-summary-total { display:flex; justify-content:space-between; font-weight:700; font-size:15px; padding-top:8px; margin-top:8px; border-top:1px solid var(--border); color:var(--gold); }
@@ -215,15 +204,13 @@ const css = `
     .modal-overlay { align-items:flex-end; padding:0; }
     .revenue-total { flex-direction:column; gap:8px; }
   }
-  @media (max-width: 480px) {
-    .stats-grid { grid-template-columns:1fr; }
-  }
+  @media (max-width: 480px) { .stats-grid { grid-template-columns:1fr; } }
 `;
 
 // ===================== REACT APP =====================
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect } = React;
 
-export default function BarberOS() {
+function BarberOS() {
   const [currentUser, setCurrentUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [msg, setMsg] = useState(null);
@@ -231,8 +218,7 @@ export default function BarberOS() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Init superadmin if not exists
-    const initSuperAdmin = async () => {
+    const init = async () => {
       const existing = await fbGet("users/superadmin");
       if (!existing) {
         await fbSet("users/superadmin", {
@@ -240,59 +226,39 @@ export default function BarberOS() {
           role: "superadmin", name: "Super Admin", active: true
         });
       }
-      // Check saved session
       const saved = localStorage.getItem("barberos_session");
       if (saved) {
         try {
           const sess = JSON.parse(saved);
           const users = await fbGet("users");
           if (users) {
-            const userList = Object.values(users);
-            const user = userList.find(u => u.id === sess.id && u.username === sess.username);
-            if (user) setCurrentUser(user);
+            const user = Object.values(users).find(u => u.id === sess.id && u.username === sess.username);
+            if (user && user.active !== false) setCurrentUser(user);
           }
         } catch(e) {}
       }
       setLoading(false);
     };
-    initSuperAdmin();
+    init();
   }, []);
 
-  const showMsg = (text, type = "success") => {
-    setMsg({ text, type });
-    setTimeout(() => setMsg(null), 3500);
-  };
+  const showMsg = (text, type = "success") => { setMsg({ text, type }); setTimeout(() => setMsg(null), 3500); };
 
-  const handleLogin = async (user, remember) => {
+  const handleLogin = (user, remember) => {
     setCurrentUser(user);
     if (remember) localStorage.setItem("barberos_session", JSON.stringify({ id: user.id, username: user.username }));
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("barberos_session");
-    setCurrentUser(null);
-    setPage("dashboard");
-  };
-
-  const getShop = async () => {
-    if (!currentUser || currentUser.role === "superadmin") return null;
-    const shops = await fbGet("shops");
-    if (!shops) return null;
-    return Object.values(shops).find(s => s.id === currentUser.shopId);
-  };
+  const handleLogout = () => { localStorage.removeItem("barberos_session"); setCurrentUser(null); setPage("dashboard"); };
 
   if (loading) return (
     <>
       <style>{css}</style>
-      <div className="loading-screen">
-        <h2>✂️ BarberOS</h2>
-        <div className="spinner"></div>
-        <p>جاري التحميل...</p>
-      </div>
+      <div className="loading-screen"><h2>✂️ BarberOS</h2><div className="spinner"></div><p>جاري التحميل...</p></div>
     </>
   );
 
-  if (!currentUser) return (<><style>{css}</style><AuthPage onLogin={handleLogin} db={db} fbGet={fbGet} fbSet={fbSet} /></>);
+  if (!currentUser) return (<><style>{css}</style><AuthPage onLogin={handleLogin} /></>);
 
   return (
     <>
@@ -322,7 +288,7 @@ export default function BarberOS() {
   );
 }
 
-// AUTH
+// ===================== AUTH =====================
 function AuthPage({ onLogin }) {
   const [tab, setTab] = useState("login");
   const [form, setForm] = useState({ username: "", password: "", shopName: "", ownerName: "" });
@@ -336,8 +302,7 @@ function AuthPage({ onLogin }) {
     try {
       const users = await fbGet("users");
       if (!users) { setErr("لا يوجد مستخدمين"); setLoading(false); return; }
-      const userList = Object.values(users);
-      const user = userList.find(u => u.username === form.username && u.password === form.password);
+      const user = Object.values(users).find(u => u.username === form.username && u.password === form.password);
       if (!user) { setErr("اسم المستخدم أو كلمة المرور غلط"); setLoading(false); return; }
       if (user.active === false) { setErr("هذا الحساب موقوف"); setLoading(false); return; }
       onLogin(user, remember);
@@ -354,9 +319,8 @@ function AuthPage({ onLogin }) {
       if (userList.find(u => u.username === form.username)) { setErr("اسم المستخدم موجود بالفعل"); setLoading(false); return; }
       const shopId = "shop_" + Date.now();
       const userId = "u_" + Date.now();
-      const newShop = { id: shopId, name: form.shopName, ownerName: form.ownerName, createdAt: today(), services: {}, subscriptionPlans: {}, active: true };
+      await fbSet(`shops/${shopId}`, { id: shopId, name: form.shopName, ownerName: form.ownerName, createdAt: today(), active: true });
       const newUser = { id: userId, username: form.username, password: form.password, role: "owner", name: form.ownerName, shopId, active: true };
-      await fbSet(`shops/${shopId}`, newShop);
       await fbSet(`users/${userId}`, newUser);
       onLogin(newUser, remember);
     } catch(e) { setErr("حدث خطأ، حاول تاني"); }
@@ -400,25 +364,24 @@ function AuthPage({ onLogin }) {
   );
 }
 
-// SIDEBAR
+// ===================== SIDEBAR =====================
 function Sidebar({ user, page, setPage, onLogout, isOpen }) {
   const ownerNav = [
     { id: "dashboard", icon: "📊", label: "لوحة التحكم" },
-    { id: "clients", icon: "👥", label: "العملاء" },
-    { id: "services", icon: "✂️", label: "الخدمات" },
+    { id: "clients",   icon: "👥", label: "العملاء" },
+    { id: "services",  icon: "✂️", label: "الخدمات" },
     { id: "subscriptions", icon: "🎫", label: "الاشتراكات" },
-    { id: "barbers", icon: "👤", label: "الحلاقين" },
-    { id: "sessions", icon: "📋", label: "الجلسات" },
-    { id: "revenue", icon: "💰", label: "الإيرادات" },
-    { id: "settings", icon: "⚙️", label: "الإعدادات" },
+    { id: "barbers",   icon: "👤", label: "الحلاقين" },
+    { id: "sessions",  icon: "📋", label: "الجلسات" },
+    { id: "revenue",   icon: "💰", label: "الإيرادات" },
+    { id: "settings",  icon: "⚙️", label: "الإعدادات" },
   ];
   const nav = user.role === "superadmin"
-    ? [{ id: "dashboard", icon: "📊", label: "لوحة التحكم" }, { id: "shops", icon: "🏪", label: "الصالونات" }, { id: "users", icon: "👥", label: "المستخدمين" }, { id: "settings", icon: "⚙️", label: "الإعدادات" }]
+    ? [{id:"dashboard",icon:"📊",label:"لوحة التحكم"},{id:"shops",icon:"🏪",label:"الصالونات"},{id:"users",icon:"👥",label:"المستخدمين"},{id:"settings",icon:"⚙️",label:"الإعدادات"}]
     : user.role === "owner" ? ownerNav
     : user.role === "manager" ? ownerNav.filter(n => n.id !== "revenue")
-    : [{ id: "sessions", icon: "📋", label: "تسجيل جلسة" }, { id: "dashboard", icon: "📊", label: "إحصائياتي" }, { id: "settings", icon: "⚙️", label: "الإعدادات" }];
-
-  const roleLabel = { superadmin: "Super Admin", owner: "صاحب الصالون", manager: "مدير", barber: "حلاق" }[user.role];
+    : [{id:"sessions",icon:"📋",label:"تسجيل جلسة"},{id:"dashboard",icon:"📊",label:"إحصائياتي"},{id:"settings",icon:"⚙️",label:"الإعدادات"}];
+  const roleLabel = {superadmin:"Super Admin",owner:"صاحب الصالون",manager:"مدير",barber:"حلاق"}[user.role];
 
   return (
     <aside className={`sidebar ${isOpen ? "open" : ""}`}>
@@ -435,13 +398,13 @@ function Sidebar({ user, page, setPage, onLogout, isOpen }) {
         ))}
       </nav>
       <div className="sidebar-bottom">
-        <button className="btn btn-outline btn-full btn-sm" style={{ color: "rgba(255,255,255,0.5)", borderColor: "rgba(255,255,255,0.1)" }} onClick={onLogout}>⎋ تسجيل الخروج</button>
+        <button className="btn btn-outline btn-full btn-sm" style={{color:"rgba(255,255,255,0.5)",borderColor:"rgba(255,255,255,0.1)"}} onClick={onLogout}>⎋ تسجيل الخروج</button>
       </div>
     </aside>
   );
 }
 
-// CLIENTS
+// ===================== CLIENTS =====================
 function ClientsPage({ user, showMsg }) {
   const [clients, setClients] = useState([]);
   const [modal, setModal] = useState(null);
@@ -451,10 +414,8 @@ function ClientsPage({ user, showMsg }) {
   const [justCreated, setJustCreated] = useState(null);
 
   useEffect(() => {
-    const clientsRef = ref(db, `clients_${user.shopId}`);
-    const unsub = onValue(clientsRef, snap => {
-      if (snap.exists()) setClients(Object.values(snap.val()));
-      else setClients([]);
+    const unsub = onValue(ref(db, `clients_${user.shopId}`), snap => {
+      setClients(snap.exists() ? Object.values(snap.val()) : []);
     });
     return () => unsub();
   }, []);
@@ -486,7 +447,7 @@ function ClientsPage({ user, showMsg }) {
     <div className="fade-in">
       <div className="page-header flex-between">
         <div><h1>العملاء</h1><p>{clients.length} عميل مسجل</p></div>
-        <button className="btn btn-primary" onClick={() => { setNewClient({ name: "", phone: "" }); setModal("add"); }}>+ عميل جديد</button>
+        <button className="btn btn-primary" onClick={() => { setNewClient({name:"",phone:""}); setModal("add"); }}>+ عميل جديد</button>
       </div>
       <div className="card mb-24">
         <div className="search-wrap">
@@ -496,19 +457,19 @@ function ClientsPage({ user, showMsg }) {
       </div>
       {filtered.length === 0
         ? <EmptyState icon="👥" text={search ? "مفيش نتايج" : "لا يوجد عملاء بعد"} />
-        : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {filtered.map(c => {
-              const initials = c.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+              const initials = c.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
               return (
                 <div key={c.id} className="client-card">
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{display:"flex",alignItems:"center",gap:14}}>
                     <div className="client-avatar">{initials}</div>
                     <div>
-                      <div className="font-bold" style={{ fontSize: 15 }}>{c.name}</div>
+                      <div className="font-bold" style={{fontSize:15}}>{c.name}</div>
                       <div className="text-sm text-muted">{c.phone || "بدون رقم"} · {c.createdAt}</div>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                     <span className="id-badge">{c.id}</span>
                     <button className="btn btn-outline btn-sm" onClick={() => { setSelected(c); setModal("view"); }}>عرض</button>
                     <button className="btn btn-danger btn-sm" onClick={() => deleteClient(c.id)}>حذف</button>
@@ -517,13 +478,12 @@ function ClientsPage({ user, showMsg }) {
               );
             })}
           </div>}
-
       {modal === "add" && (
         <Modal title="تسجيل عميل جديد" onClose={() => setModal(null)}>
-          <div className="form-group"><label>اسم العميل</label><input value={newClient.name} onChange={e => setNewClient(x => ({ ...x, name: e.target.value }))} autoFocus /></div>
-          <div className="form-group"><label>رقم التليفون (اختياري)</label><input value={newClient.phone} onChange={e => setNewClient(x => ({ ...x, phone: e.target.value }))} /></div>
+          <div className="form-group"><label>اسم العميل</label><input value={newClient.name} onChange={e => setNewClient(x=>({...x,name:e.target.value}))} autoFocus /></div>
+          <div className="form-group"><label>رقم التليفون (اختياري)</label><input value={newClient.phone} onChange={e => setNewClient(x=>({...x,phone:e.target.value}))} /></div>
           <div className="flex-gap">
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={addClient}>تسجيل وإظهار الـ ID</button>
+            <button className="btn btn-primary" style={{flex:1}} onClick={addClient}>تسجيل وإظهار الـ ID</button>
             <button className="btn btn-outline" onClick={() => setModal(null)}>إلغاء</button>
           </div>
         </Modal>
@@ -540,15 +500,15 @@ function ClientsPage({ user, showMsg }) {
       )}
       {modal === "view" && selected && (
         <Modal title="بيانات العميل" onClose={() => setModal(null)}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
-            <div className="client-avatar" style={{ width: 56, height: 56, fontSize: 22 }}>
-              {selected.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+          <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:24}}>
+            <div className="client-avatar" style={{width:56,height:56,fontSize:22}}>
+              {selected.name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}
             </div>
             <div>
-              <div className="font-bold font-serif" style={{ fontSize: 20 }}>{selected.name}</div>
+              <div className="font-bold font-serif" style={{fontSize:20}}>{selected.name}</div>
               <div className="text-sm text-muted">{selected.phone || "بدون رقم"}</div>
             </div>
-            <span className="id-badge" style={{ marginLeft: "auto" }}>{selected.id}</span>
+            <span className="id-badge" style={{marginLeft:"auto"}}>{selected.id}</span>
           </div>
           <button className="btn btn-outline btn-full" onClick={() => setModal(null)}>إغلاق</button>
         </Modal>
@@ -557,11 +517,11 @@ function ClientsPage({ user, showMsg }) {
   );
 }
 
-// SERVICES
+// ===================== SERVICES =====================
 function ServicesPage({ user, showMsg }) {
   const [services, setServices] = useState([]);
   const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({ name: "", price: "", duration: "", editId: null });
+  const [form, setForm] = useState({ name:"", price:"", duration:"", editId:null });
 
   useEffect(() => {
     const unsub = onValue(ref(db, `shops/${user.shopId}/services`), snap => {
@@ -573,7 +533,7 @@ function ServicesPage({ user, showMsg }) {
   const save = async () => {
     if (!form.name || !form.price) { showMsg("ارجاء ملء الاسم والسعر", "error"); return; }
     const id = form.editId || "srv_" + Date.now();
-    await fbSet(`shops/${user.shopId}/services/${id}`, { id, name: form.name, price: Number(form.price), duration: form.duration });
+    await fbSet(`shops/${user.shopId}/services/${id}`, { id, name:form.name, price:Number(form.price), duration:form.duration });
     setModal(null);
     showMsg("تم الحفظ ✓");
   };
@@ -587,7 +547,7 @@ function ServicesPage({ user, showMsg }) {
     <div className="fade-in">
       <div className="page-header flex-between">
         <div><h1>الخدمات والأسعار</h1></div>
-        <button className="btn btn-primary" onClick={() => { setForm({ name: "", price: "", duration: "", editId: null }); setModal("form"); }}>+ إضافة خدمة</button>
+        <button className="btn btn-primary" onClick={() => { setForm({name:"",price:"",duration:"",editId:null}); setModal("form"); }}>+ إضافة خدمة</button>
       </div>
       <div className="card">
         {services.length === 0 ? <EmptyState icon="✂️" text="لا يوجد خدمات بعد" /> : (
@@ -595,14 +555,14 @@ function ServicesPage({ user, showMsg }) {
             <table>
               <thead><tr><th>#</th><th>الخدمة</th><th>السعر</th><th>المدة</th><th>إجراءات</th></tr></thead>
               <tbody>
-                {services.map((s, i) => (
+                {services.map((s,i) => (
                   <tr key={s.id}>
-                    <td className="text-muted">{i + 1}</td>
+                    <td className="text-muted">{i+1}</td>
                     <td className="font-bold">{s.name}</td>
                     <td><span className="badge badge-gold">{s.price} جنيه</span></td>
-                    <td className="text-muted">{s.duration || "—"}</td>
+                    <td className="text-muted">{s.duration||"—"}</td>
                     <td><div className="flex-gap">
-                      <button className="btn btn-outline btn-sm" onClick={() => { setForm({ name: s.name, price: s.price, duration: s.duration || "", editId: s.id }); setModal("form"); }}>تعديل</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setForm({name:s.name,price:s.price,duration:s.duration||"",editId:s.id}); setModal("form"); }}>تعديل</button>
                       <button className="btn btn-danger btn-sm" onClick={() => del(s.id)}>حذف</button>
                     </div></td>
                   </tr>
@@ -614,13 +574,13 @@ function ServicesPage({ user, showMsg }) {
       </div>
       {modal === "form" && (
         <Modal title={form.editId ? "تعديل الخدمة" : "إضافة خدمة"} onClose={() => setModal(null)}>
-          <div className="form-group"><label>اسم الخدمة</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+          <div className="form-group"><label>اسم الخدمة</label><input value={form.name} onChange={e => setForm(f=>({...f,name:e.target.value}))} /></div>
           <div className="grid-2">
-            <div className="form-group"><label>السعر</label><input type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} /></div>
-            <div className="form-group"><label>المدة</label><input value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))} placeholder="30 دقيقة" /></div>
+            <div className="form-group"><label>السعر</label><input type="number" value={form.price} onChange={e => setForm(f=>({...f,price:e.target.value}))} /></div>
+            <div className="form-group"><label>المدة</label><input value={form.duration} onChange={e => setForm(f=>({...f,duration:e.target.value}))} placeholder="30 دقيقة" /></div>
           </div>
           <div className="flex-gap mt-16">
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={save}>حفظ</button>
+            <button className="btn btn-primary" style={{flex:1}} onClick={save}>حفظ</button>
             <button className="btn btn-outline" onClick={() => setModal(null)}>إلغاء</button>
           </div>
         </Modal>
@@ -629,83 +589,82 @@ function ServicesPage({ user, showMsg }) {
   );
 }
 
-// SUBSCRIPTIONS
+// ===================== SUBSCRIPTIONS =====================
 function SubscriptionsPage({ user, showMsg }) {
   const [plans, setPlans] = useState([]);
   const [subs, setSubs] = useState([]);
   const [clients, setClients] = useState([]);
   const [modal, setModal] = useState(null);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ clientId: "", planId: "" });
-  const [planForm, setPlanForm] = useState({ name: "", price: "", sessions: "", editId: null });
+  const [form, setForm] = useState({ clientId:"", planId:"" });
+  const [planForm, setPlanForm] = useState({ name:"", price:"", sessions:"", editId:null });
 
   useEffect(() => {
-    const u1 = onValue(ref(db, `shops/${user.shopId}/subscriptionPlans`), snap => setPlans(snap.exists() ? Object.values(snap.val()) : []));
-    const u2 = onValue(ref(db, `subs_${user.shopId}`), snap => setSubs(snap.exists() ? Object.values(snap.val()) : []));
-    const u3 = onValue(ref(db, `clients_${user.shopId}`), snap => setClients(snap.exists() ? Object.values(snap.val()) : []));
+    const u1 = onValue(ref(db, `shops/${user.shopId}/subscriptionPlans`), snap => setPlans(snap.exists()?Object.values(snap.val()):[]));
+    const u2 = onValue(ref(db, `subs_${user.shopId}`), snap => setSubs(snap.exists()?Object.values(snap.val()):[]));
+    const u3 = onValue(ref(db, `clients_${user.shopId}`), snap => setClients(snap.exists()?Object.values(snap.val()):[]));
     return () => { u1(); u2(); u3(); };
   }, []);
 
   const savePlan = async () => {
-    if (!planForm.name || !planForm.price || !planForm.sessions) { showMsg("ارجاء ملء كل الحقول", "error"); return; }
+    if (!planForm.name || !planForm.price || !planForm.sessions) { showMsg("ارجاء ملء كل الحقول","error"); return; }
     const id = planForm.editId || "plan_" + Date.now();
-    await fbSet(`shops/${user.shopId}/subscriptionPlans/${id}`, { id, name: planForm.name, price: Number(planForm.price), sessions: Number(planForm.sessions) });
-    setModal(null); setPlanForm({ name: "", price: "", sessions: "", editId: null });
+    await fbSet(`shops/${user.shopId}/subscriptionPlans/${id}`, { id, name:planForm.name, price:Number(planForm.price), sessions:Number(planForm.sessions) });
+    setModal(null); setPlanForm({name:"",price:"",sessions:"",editId:null});
     showMsg("تم حفظ الباقة ✓");
   };
 
   const addSub = async () => {
-    if (!form.planId || !form.clientId) { showMsg("اختار العميل والباقة", "error"); return; }
+    if (!form.planId || !form.clientId) { showMsg("اختار العميل والباقة","error"); return; }
     const plan = plans.find(p => p.id === form.planId);
     const client = clients.find(c => c.id === form.clientId);
     const id = "sub_" + Date.now();
-    const newSub = { id, clientId: client.id, clientName: client.name, phone: client.phone || "", planId: form.planId, planName: plan.name, price: plan.price, totalSessions: plan.sessions, remaining: plan.sessions, month: thisMonth(), createdAt: today() };
-    await fbSet(`subs_${user.shopId}/${id}`, newSub);
-    setModal(null); setForm({ clientId: "", planId: "" });
-    showMsg(`تم الاشتراك ✓`);
+    await fbSet(`subs_${user.shopId}/${id}`, { id, clientId:client.id, clientName:client.name, phone:client.phone||"", planId:form.planId, planName:plan.name, price:plan.price, totalSessions:plan.sessions, remaining:plan.sessions, month:thisMonth(), createdAt:today() });
+    setModal(null); setForm({clientId:"",planId:""});
+    showMsg("تم الاشتراك ✓");
   };
 
   const thisMonthSubs = subs.filter(s => s.month === thisMonth());
-  const filtered = subs.filter(s => s.clientName?.toLowerCase().includes(search.toLowerCase()) || s.clientId?.includes(search)).reverse();
+  const filtered = subs.filter(s => s.clientName?.toLowerCase().includes(search.toLowerCase()) || s.clientId?.includes(search)).slice().reverse();
 
   return (
     <div className="fade-in">
       <div className="page-header flex-between">
         <div><h1>الاشتراكات الشهرية</h1></div>
         <div className="flex-gap">
-          <button className="btn btn-outline btn-sm" onClick={() => { setPlanForm({ name: "", price: "", sessions: "", editId: null }); setModal("plan"); }}>+ باقة</button>
+          <button className="btn btn-outline btn-sm" onClick={() => { setPlanForm({name:"",price:"",sessions:"",editId:null}); setModal("plan"); }}>+ باقة</button>
           <button className="btn btn-primary" onClick={() => setModal("add")}>+ اشتراك جديد</button>
         </div>
       </div>
       {plans.length > 0 && (
         <div className="card mb-24">
           <div className="card-title">🎫 الباقات</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
             {plans.map(p => (
-              <div key={p.id} className="card" style={{ flex: "0 0 auto", minWidth: 140, padding: "14px 18px", textAlign: "center" }}>
+              <div key={p.id} className="card" style={{flex:"0 0 auto",minWidth:140,padding:"14px 18px",textAlign:"center"}}>
                 <div className="font-bold">{p.name}</div>
-                <div className="font-serif" style={{ fontSize: 22, color: "var(--gold)" }}>{p.price} ج</div>
+                <div className="font-serif" style={{fontSize:22,color:"var(--gold)"}}>{p.price} ج</div>
                 <div className="text-xs text-muted">{p.sessions} جلسة / شهر</div>
-                <div className="flex-gap" style={{ marginTop: 8, justifyContent: "center" }}>
-                  <button className="btn btn-outline btn-sm" onClick={() => { setPlanForm({ name: p.name, price: p.price, sessions: p.sessions, editId: p.id }); setModal("plan"); }}>تعديل</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => remove(ref(db, `shops/${user.shopId}/subscriptionPlans/${p.id}`))}>حذف</button>
+                <div className="flex-gap" style={{marginTop:8,justifyContent:"center"}}>
+                  <button className="btn btn-outline btn-sm" onClick={() => { setPlanForm({name:p.name,price:p.price,sessions:p.sessions,editId:p.id}); setModal("plan"); }}>تعديل</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => remove(ref(db,`shops/${user.shopId}/subscriptionPlans/${p.id}`))}>حذف</button>
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
-      <div className="stats-grid mb-24" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
+      <div className="stats-grid mb-24" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
         <StatCard icon="👥" value={thisMonthSubs.length} label="اشتراك الشهر" cls="stat-gold" />
-        <StatCard icon="✅" value={thisMonthSubs.filter(s => s.remaining > 0).length} label="نشط" cls="stat-green" />
-        <StatCard icon="💰" value={`${thisMonthSubs.reduce((s, x) => s + x.price, 0)} ج`} label="إيراد" cls="stat-blue" />
+        <StatCard icon="✅" value={thisMonthSubs.filter(s=>s.remaining>0).length} label="نشط" cls="stat-green" />
+        <StatCard icon="💰" value={`${thisMonthSubs.reduce((s,x)=>s+x.price,0)} ج`} label="إيراد" cls="stat-blue" />
       </div>
       <div className="card">
         <div className="flex-between mb-16">
-          <div className="card-title" style={{ marginBottom: 0 }}>سجل الاشتراكات</div>
-          <div className="search-wrap" style={{ width: 240 }}>
+          <div className="card-title" style={{marginBottom:0}}>سجل الاشتراكات</div>
+          <div className="search-wrap" style={{width:240}}>
             <span className="search-icon">🔍</span>
-            <input className="search-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث..." />
+            <input className="search-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="بحث..." />
           </div>
         </div>
         {filtered.length === 0 ? <EmptyState icon="🎫" text="لا يوجد اشتراكات" /> : (
@@ -718,7 +677,7 @@ function SubscriptionsPage({ user, showMsg }) {
                     <td><span className="id-badge">{s.clientId}</span></td>
                     <td className="font-bold">{s.clientName}</td>
                     <td>{s.planName}<div className="text-xs text-muted">{s.price} ج</div></td>
-                    <td><span className={`font-bold ${s.remaining === 0 ? "text-red" : "text-green"}`}>{s.remaining}</span><span className="text-xs text-muted"> / {s.totalSessions}</span></td>
+                    <td><span className={`font-bold ${s.remaining===0?"text-red":"text-green"}`}>{s.remaining}</span><span className="text-xs text-muted"> / {s.totalSessions}</span></td>
                     <td className="text-muted text-sm">{s.month}</td>
                   </tr>
                 ))}
@@ -731,37 +690,37 @@ function SubscriptionsPage({ user, showMsg }) {
         <Modal title="إضافة اشتراك" onClose={() => setModal(null)}>
           <div className="form-group">
             <label>العميل</label>
-            <select value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}>
+            <select value={form.clientId} onChange={e=>setForm(f=>({...f,clientId:e.target.value}))}>
               <option value="">— اختار عميل —</option>
-              {clients.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
+              {clients.map(c=><option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
             </select>
           </div>
           <div className="form-group">
             <label>الباقة</label>
             <div className="chips">
-              {plans.map(p => (
-                <div key={p.id} className={`chip ${form.planId === p.id ? "selected" : ""}`} onClick={() => setForm(f => ({ ...f, planId: p.id }))}>
+              {plans.map(p=>(
+                <div key={p.id} className={`chip ${form.planId===p.id?"selected":""}`} onClick={()=>setForm(f=>({...f,planId:p.id}))}>
                   {p.name} — {p.price}ج
                 </div>
               ))}
             </div>
           </div>
           <div className="flex-gap mt-16">
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={addSub} disabled={!form.planId || !form.clientId}>تأكيد</button>
-            <button className="btn btn-outline" onClick={() => setModal(null)}>إلغاء</button>
+            <button className="btn btn-primary" style={{flex:1}} onClick={addSub} disabled={!form.planId||!form.clientId}>تأكيد</button>
+            <button className="btn btn-outline" onClick={()=>setModal(null)}>إلغاء</button>
           </div>
         </Modal>
       )}
       {modal === "plan" && (
-        <Modal title={planForm.editId ? "تعديل الباقة" : "إضافة باقة"} onClose={() => setModal(null)}>
-          <div className="form-group"><label>اسم الباقة</label><input value={planForm.name} onChange={e => setPlanForm(f => ({ ...f, name: e.target.value }))} /></div>
+        <Modal title={planForm.editId?"تعديل الباقة":"إضافة باقة"} onClose={()=>setModal(null)}>
+          <div className="form-group"><label>اسم الباقة</label><input value={planForm.name} onChange={e=>setPlanForm(f=>({...f,name:e.target.value}))} /></div>
           <div className="grid-2">
-            <div className="form-group"><label>السعر</label><input type="number" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} /></div>
-            <div className="form-group"><label>عدد الجلسات</label><input type="number" value={planForm.sessions} onChange={e => setPlanForm(f => ({ ...f, sessions: e.target.value }))} /></div>
+            <div className="form-group"><label>السعر</label><input type="number" value={planForm.price} onChange={e=>setPlanForm(f=>({...f,price:e.target.value}))} /></div>
+            <div className="form-group"><label>عدد الجلسات</label><input type="number" value={planForm.sessions} onChange={e=>setPlanForm(f=>({...f,sessions:e.target.value}))} /></div>
           </div>
           <div className="flex-gap mt-16">
-            <button className="btn btn-gold" style={{ flex: 1 }} onClick={savePlan}>حفظ</button>
-            <button className="btn btn-outline" onClick={() => setModal(null)}>إلغاء</button>
+            <button className="btn btn-gold" style={{flex:1}} onClick={savePlan}>حفظ</button>
+            <button className="btn btn-outline" onClick={()=>setModal(null)}>إلغاء</button>
           </div>
         </Modal>
       )}
@@ -769,49 +728,49 @@ function SubscriptionsPage({ user, showMsg }) {
   );
 }
 
-// BARBERS
+// ===================== BARBERS =====================
 function BarbersPage({ user, showMsg }) {
   const [staff, setStaff] = useState([]);
   const [modal, setModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
-  const [form, setForm] = useState({ name: "", username: "", password: "", role: "barber" });
+  const [form, setForm] = useState({ name:"", username:"", password:"", role:"barber" });
 
   useEffect(() => {
     const unsub = onValue(ref(db, "users"), snap => {
-      if (snap.exists()) setStaff(Object.values(snap.val()).filter(u => (u.role === "barber" || u.role === "manager") && u.shopId === user.shopId));
+      if (snap.exists()) setStaff(Object.values(snap.val()).filter(u=>(u.role==="barber"||u.role==="manager")&&u.shopId===user.shopId));
     });
     return () => unsub();
   }, []);
 
   const saveStaff = async () => {
-    if (!form.name || !form.username) { showMsg("ارجاء ملء كل الحقول", "error"); return; }
-    const users = await fbGet("users");
-    const userList = users ? Object.values(users) : [];
+    if (!form.name || !form.username) { showMsg("ارجاء ملء كل الحقول","error"); return; }
     if (editUser) {
-      const updates = { name: form.name, username: form.username, role: form.role };
-      if (form.password) updates.password = form.password;
-      await update(ref(db, `users/${editUser.id}`), updates);
+      const upd = { name:form.name, username:form.username, role:form.role };
+      if (form.password) upd.password = form.password;
+      await update(ref(db,`users/${editUser.id}`), upd);
       showMsg("تم التعديل ✓");
     } else {
-      if (!form.password) { showMsg("ارجاء اكتب كلمة مرور", "error"); return; }
-      if (userList.find(u => u.username === form.username)) { showMsg("اسم المستخدم موجود", "error"); return; }
+      if (!form.password) { showMsg("ارجاء اكتب كلمة مرور","error"); return; }
+      const users = await fbGet("users");
+      const userList = users ? Object.values(users) : [];
+      if (userList.find(u=>u.username===form.username)) { showMsg("اسم المستخدم موجود","error"); return; }
       const id = "b_" + Date.now();
-      await fbSet(`users/${id}`, { id, username: form.username, password: form.password, role: form.role, name: form.name, shopId: user.shopId, active: true });
+      await fbSet(`users/${id}`, { id, username:form.username, password:form.password, role:form.role, name:form.name, shopId:user.shopId, active:true });
       showMsg("تم الإضافة ✓");
     }
-    setModal(false); setEditUser(null); setForm({ name: "", username: "", password: "", role: "barber" });
+    setModal(false); setEditUser(null); setForm({name:"",username:"",password:"",role:"barber"});
   };
 
   const toggleActive = async (uid, current) => {
-    await update(ref(db, `users/${uid}`), { active: !current });
-    showMsg(!current ? "تم التفعيل ✓" : "تم التعطيل");
+    await update(ref(db,`users/${uid}`), { active:!current });
+    showMsg(!current?"تم التفعيل ✓":"تم التعطيل");
   };
 
   return (
     <div className="fade-in">
       <div className="page-header flex-between">
         <div><h1>الحلاقين والمديرين</h1></div>
-        <button className="btn btn-primary" onClick={() => { setEditUser(null); setForm({ name: "", username: "", password: "", role: "barber" }); setModal(true); }}>+ إضافة</button>
+        <button className="btn btn-primary" onClick={()=>{ setEditUser(null); setForm({name:"",username:"",password:"",role:"barber"}); setModal(true); }}>+ إضافة</button>
       </div>
       <div className="card">
         {staff.length === 0 ? <EmptyState icon="👤" text="لا يوجد موظفين" /> : (
@@ -824,12 +783,12 @@ function BarbersPage({ user, showMsg }) {
                   return (
                     <tr key={b.id}>
                       <td className="font-bold">{b.name}</td>
-                      <td><span className={`badge ${b.role === "manager" ? "badge-purple" : "badge-blue"}`}>{b.role === "manager" ? "مدير" : "حلاق"}</span></td>
+                      <td><span className={`badge ${b.role==="manager"?"badge-purple":"badge-blue"}`}>{b.role==="manager"?"مدير":"حلاق"}</span></td>
                       <td className="text-muted">{b.username}</td>
-                      <td><span className={`badge ${active ? "badge-green" : "badge-red"}`}>{active ? "نشط" : "موقوف"}</span></td>
+                      <td><span className={`badge ${active?"badge-green":"badge-red"}`}>{active?"نشط":"موقوف"}</span></td>
                       <td><div className="flex-gap">
-                        <button className="btn btn-outline btn-sm" onClick={() => { setEditUser(b); setForm({ name: b.name, username: b.username, password: "", role: b.role }); setModal(true); }}>تعديل</button>
-                        <button className={`btn btn-sm ${active ? "btn-warning" : "btn-success"}`} onClick={() => toggleActive(b.id, active)}>{active ? "تعطيل" : "تفعيل"}</button>
+                        <button className="btn btn-outline btn-sm" onClick={()=>{ setEditUser(b); setForm({name:b.name,username:b.username,password:"",role:b.role}); setModal(true); }}>تعديل</button>
+                        <button className={`btn btn-sm ${active?"btn-warning":"btn-success"}`} onClick={()=>toggleActive(b.id,active)}>{active?"تعطيل":"تفعيل"}</button>
                       </div></td>
                     </tr>
                   );
@@ -840,22 +799,22 @@ function BarbersPage({ user, showMsg }) {
         )}
       </div>
       {modal && (
-        <Modal title={editUser ? "تعديل" : "إضافة موظف"} onClose={() => { setModal(false); setEditUser(null); }}>
-          <div className="form-group"><label>الاسم</label><input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+        <Modal title={editUser?"تعديل":"إضافة موظف"} onClose={()=>{ setModal(false); setEditUser(null); }}>
+          <div className="form-group"><label>الاسم</label><input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} /></div>
           <div className="form-group">
             <label>الدور</label>
             <div className="chips">
-              <div className={`chip ${form.role === "barber" ? "selected" : ""}`} onClick={() => setForm(f => ({ ...f, role: "barber" }))}>✂️ حلاق</div>
-              <div className={`chip ${form.role === "manager" ? "selected" : ""}`} onClick={() => setForm(f => ({ ...f, role: "manager" }))}>📋 مدير</div>
+              <div className={`chip ${form.role==="barber"?"selected":""}`} onClick={()=>setForm(f=>({...f,role:"barber"}))}>✂️ حلاق</div>
+              <div className={`chip ${form.role==="manager"?"selected":""}`} onClick={()=>setForm(f=>({...f,role:"manager"}))}>📋 مدير</div>
             </div>
           </div>
           <div className="grid-2">
-            <div className="form-group"><label>اسم المستخدم</label><input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} /></div>
-            <div className="form-group"><label>كلمة المرور</label><input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} /></div>
+            <div className="form-group"><label>اسم المستخدم</label><input value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} /></div>
+            <div className="form-group"><label>كلمة المرور</label><input type="password" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} /></div>
           </div>
           <div className="flex-gap mt-16">
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveStaff}>حفظ</button>
-            <button className="btn btn-outline" onClick={() => { setModal(false); setEditUser(null); }}>إلغاء</button>
+            <button className="btn btn-primary" style={{flex:1}} onClick={saveStaff}>حفظ</button>
+            <button className="btn btn-outline" onClick={()=>{ setModal(false); setEditUser(null); }}>إلغاء</button>
           </div>
         </Modal>
       )}
@@ -863,83 +822,90 @@ function BarbersPage({ user, showMsg }) {
   );
 }
 
-// SESSIONS
+// ===================== SESSIONS =====================
 function SessionsPage({ user, showMsg }) {
   const [sessions, setSessions] = useState([]);
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ serviceIds: [], clientNote: "", clientId: "", subId: "", paymentMethod: "cash" });
+  const [form, setForm] = useState({ serviceIds:[], clientNote:"", clientId:"", subId:"", paymentMethod:"cash" });
   const [services, setServices] = useState([]);
   const [clients, setClients] = useState([]);
   const [subs, setSubs] = useState([]);
   const [filter, setFilter] = useState("today");
 
   useEffect(() => {
-    const u1 = onValue(ref(db, `shops/${user.shopId}/services`), snap => setServices(snap.exists() ? Object.values(snap.val()) : []));
-    const u2 = onValue(ref(db, `clients_${user.shopId}`), snap => setClients(snap.exists() ? Object.values(snap.val()) : []));
-    const u3 = onValue(ref(db, `subs_${user.shopId}`), snap => setSubs(snap.exists() ? Object.values(snap.val()) : []));
-    const u4 = onValue(ref(db, `sessions_${user.shopId}`), snap => setSessions(snap.exists() ? Object.values(snap.val()) : []));
+    const u1 = onValue(ref(db,`shops/${user.shopId}/services`), snap=>setServices(snap.exists()?Object.values(snap.val()):[]));
+    const u2 = onValue(ref(db,`clients_${user.shopId}`), snap=>setClients(snap.exists()?Object.values(snap.val()):[]));
+    const u3 = onValue(ref(db,`subs_${user.shopId}`), snap=>setSubs(snap.exists()?Object.values(snap.val()):[]));
+    const u4 = onValue(ref(db,`sessions_${user.shopId}`), snap=>setSessions(snap.exists()?Object.values(snap.val()):[]));
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
   const selectedServices = services.filter(s => form.serviceIds.includes(s.id));
-  const totalAmount = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const clientSubs = form.clientId ? subs.filter(s => s.clientId === form.clientId && s.month === thisMonth() && s.remaining > 0) : [];
-
-  const toggleService = (id) => setForm(f => ({ ...f, serviceIds: f.serviceIds.includes(id) ? f.serviceIds.filter(x => x !== id) : [...f.serviceIds, id] }));
+  const totalAmount = selectedServices.reduce((sum,s)=>sum+s.price, 0);
+  const clientSubs = form.clientId ? subs.filter(s=>s.clientId===form.clientId&&s.month===thisMonth()&&s.remaining>0) : [];
+  const toggleService = (id) => setForm(f=>({ ...f, serviceIds: f.serviceIds.includes(id) ? f.serviceIds.filter(x=>x!==id) : [...f.serviceIds,id] }));
 
   const addSession = async () => {
-    if (form.serviceIds.length === 0) { showMsg("اختار خدمة", "error"); return; }
+    if (form.serviceIds.length === 0) { showMsg("اختار خدمة","error"); return; }
     let amount = totalAmount;
     if (form.subId) {
-      await update(ref(db, `subs_${user.shopId}/${form.subId}`), { remaining: clientSubs.find(s => s.id === form.subId).remaining - 1 });
+      const sub = clientSubs.find(s=>s.id===form.subId);
+      await update(ref(db,`subs_${user.shopId}/${form.subId}`), { remaining: sub.remaining - 1 });
       amount = 0;
     }
-    const client = clients.find(c => c.id === form.clientId);
+    const client = clients.find(c=>c.id===form.clientId);
     const id = "sess_" + Date.now();
-    const ns = { id, date: today(), time: getTime(), serviceIds: form.serviceIds, serviceNames: selectedServices.map(s => s.name).join(" + "), barberId: user.id, barberName: user.name, amount, paymentMethod: form.subId ? "subscription" : form.paymentMethod, clientNote: form.clientNote, clientId: form.clientId || null, clientName: client?.name || null };
-    await fbSet(`sessions_${user.shopId}/${id}`, ns);
+    await fbSet(`sessions_${user.shopId}/${id}`, {
+      id, date:today(), time:getTime(),
+      serviceIds:form.serviceIds,
+      serviceNames:selectedServices.map(s=>s.name).join(" + "),
+      barberId:user.id, barberName:user.name,
+      amount, paymentMethod:form.subId?"subscription":form.paymentMethod,
+      clientNote:form.clientNote,
+      clientId:form.clientId||null, clientName:client?.name||null
+    });
     setModal(false);
-    setForm({ serviceIds: [], clientNote: "", clientId: "", subId: "", paymentMethod: "cash" });
+    setForm({serviceIds:[],clientNote:"",clientId:"",subId:"",paymentMethod:"cash"});
     showMsg("تم تسجيل الجلسة ✓");
   };
 
   const filtered = sessions.filter(s => {
-    if (filter === "today") return s.date === today();
-    if (filter === "month") return s.date?.startsWith(thisMonth());
+    if (filter==="today") return s.date===today();
+    if (filter==="month") return s.date?.startsWith(thisMonth());
     return true;
   }).slice().reverse();
 
   return (
     <div className="fade-in">
       <div className="page-header flex-between">
-        <div><h1>سجل الجلسات</h1><div className="datetime-badge" style={{ marginTop: 6 }}>🕐 {today()} — {getTime()}</div></div>
-        <button className="btn btn-primary" onClick={() => setModal(true)}>+ تسجيل جلسة</button>
+        <div><h1>سجل الجلسات</h1><div className="datetime-badge" style={{marginTop:6}}>🕐 {today()} — {getTime()}</div></div>
+        <button className="btn btn-primary" onClick={()=>setModal(true)}>+ تسجيل جلسة</button>
       </div>
       <div className="chips mb-24">
-        {["today", "month", "all"].map(f => (
-          <div key={f} className={`chip ${filter === f ? "selected" : ""}`} onClick={() => setFilter(f)}>
-            {f === "today" ? "اليوم" : f === "month" ? "الشهر" : "الكل"}
+        {["today","month","all"].map(f=>(
+          <div key={f} className={`chip ${filter===f?"selected":""}`} onClick={()=>setFilter(f)}>
+            {f==="today"?"اليوم":f==="month"?"الشهر":"الكل"}
           </div>
         ))}
       </div>
       <div className="card">
         <div className="flex-between mb-16">
-          <div className="card-title" style={{ marginBottom: 0 }}>الجلسات <span className="badge badge-gray">{filtered.length}</span></div>
-          <span className="font-bold text-gold">إجمالي: {filtered.reduce((s, x) => s + (x.amount || 0), 0)} ج</span>
+          <div className="card-title" style={{marginBottom:0}}>الجلسات <span className="badge badge-gray">{filtered.length}</span></div>
+          <span className="font-bold text-gold">إجمالي: {filtered.reduce((s,x)=>s+(x.amount||0),0)} ج</span>
         </div>
-        {filtered.length === 0 ? <EmptyState icon="📋" text="لا يوجد جلسات" /> : (
+        {filtered.length===0 ? <EmptyState icon="📋" text="لا يوجد جلسات" /> : (
           <div className="table-wrap">
             <table>
               <thead><tr><th>التاريخ</th><th>الخدمة</th><th>العميل</th><th>الحلاق</th><th>المبلغ</th><th>الدفع</th></tr></thead>
               <tbody>
-                {filtered.map(s => (
+                {filtered.map(s=>(
                   <tr key={s.id}>
                     <td className="text-muted text-sm">{s.date}<div className="text-xs">{s.time}</div></td>
                     <td className="font-bold">{s.serviceNames}</td>
-                    <td>{s.clientName ? <span className="text-sm">{s.clientName}</span> : <span className="text-muted text-sm">—</span>}</td>
+                    <td>{s.clientName?<span className="text-sm">{s.clientName}</span>:<span className="text-muted text-sm">—</span>}</td>
                     <td className="text-muted text-sm">{s.barberName}</td>
-                    <td>{s.amount > 0 ? <span className="badge badge-gold">{s.amount} ج</span> : <span className="badge badge-blue">اشتراك</span>}</td>
-                    <td><span className="badge badge-gray">{PAYMENT_METHODS.find(p => p.id === s.paymentMethod)?.label || s.paymentMethod}</span></td>
+                    <td>{s.amount>0?<span className="badge badge-gold">{s.amount} ج</span>:<span className="badge badge-blue">اشتراك</span>}</td>
+                    <td><span className="badge badge-gray">{PAYMENT_METHODS.find(p=>p.id===s.paymentMethod)?.label||s.paymentMethod}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -948,36 +914,36 @@ function SessionsPage({ user, showMsg }) {
         )}
       </div>
       {modal && (
-        <Modal title="تسجيل جلسة" onClose={() => setModal(false)}>
+        <Modal title="تسجيل جلسة" onClose={()=>setModal(false)}>
           <div className="form-group">
             <label>الخدمات (ممكن تختار أكتر من واحدة)</label>
             <div className="chips">
-              {services.map(s => (
-                <div key={s.id} className={`chip ${form.serviceIds.includes(s.id) ? "selected" : ""}`} onClick={() => toggleService(s.id)}>
+              {services.map(s=>(
+                <div key={s.id} className={`chip ${form.serviceIds.includes(s.id)?"selected":""}`} onClick={()=>toggleService(s.id)}>
                   {s.name} — {s.price}ج
                 </div>
               ))}
             </div>
             {selectedServices.length > 0 && (
               <div className="service-summary">
-                {selectedServices.map(s => <div key={s.id} className="service-summary-row"><span>{s.name}</span><span>{s.price} ج</span></div>)}
+                {selectedServices.map(s=><div key={s.id} className="service-summary-row"><span>{s.name}</span><span>{s.price} ج</span></div>)}
                 <div className="service-summary-total"><span>الإجمالي</span><span>{totalAmount} ج</span></div>
               </div>
             )}
           </div>
           <div className="form-group">
             <label>العميل (اختياري)</label>
-            <select value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value, subId: "" }))}>
+            <select value={form.clientId} onChange={e=>setForm(f=>({...f,clientId:e.target.value,subId:""}))}>
               <option value="">— بدون عميل —</option>
-              {clients.map(c => <option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
+              {clients.map(c=><option key={c.id} value={c.id}>#{c.id} — {c.name}</option>)}
             </select>
           </div>
-          {clientSubs.length > 0 && (
+          {clientSubs.length>0 && (
             <div className="form-group">
               <label>استخدام اشتراك</label>
-              <select value={form.subId} onChange={e => setForm(f => ({ ...f, subId: e.target.value }))}>
+              <select value={form.subId} onChange={e=>setForm(f=>({...f,subId:e.target.value}))}>
                 <option value="">بدون اشتراك</option>
-                {clientSubs.map(s => <option key={s.id} value={s.id}>{s.planName} — {s.remaining} جلسة</option>)}
+                {clientSubs.map(s=><option key={s.id} value={s.id}>{s.planName} — {s.remaining} جلسة</option>)}
               </select>
             </div>
           )}
@@ -985,18 +951,18 @@ function SessionsPage({ user, showMsg }) {
             <div className="form-group">
               <label>طريقة الدفع</label>
               <div className="payment-methods">
-                {PAYMENT_METHODS.map(pm => (
-                  <div key={pm.id} className={`payment-chip ${form.paymentMethod === pm.id ? "selected" : ""}`} onClick={() => setForm(f => ({ ...f, paymentMethod: pm.id }))}>
+                {PAYMENT_METHODS.map(pm=>(
+                  <div key={pm.id} className={`payment-chip ${form.paymentMethod===pm.id?"selected":""}`} onClick={()=>setForm(f=>({...f,paymentMethod:pm.id}))}>
                     {pm.icon} {pm.label}
                   </div>
                 ))}
               </div>
             </div>
           )}
-          <div className="form-group"><label>ملاحظة</label><input value={form.clientNote} onChange={e => setForm(f => ({ ...f, clientNote: e.target.value }))} /></div>
+          <div className="form-group"><label>ملاحظة</label><input value={form.clientNote} onChange={e=>setForm(f=>({...f,clientNote:e.target.value}))} /></div>
           <div className="flex-gap mt-16">
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={addSession} disabled={form.serviceIds.length === 0}>تسجيل</button>
-            <button className="btn btn-outline" onClick={() => setModal(false)}>إلغاء</button>
+            <button className="btn btn-primary" style={{flex:1}} onClick={addSession} disabled={form.serviceIds.length===0}>تسجيل</button>
+            <button className="btn btn-outline" onClick={()=>setModal(false)}>إلغاء</button>
           </div>
         </Modal>
       )}
@@ -1004,24 +970,24 @@ function SessionsPage({ user, showMsg }) {
   );
 }
 
-// REVENUE
+// ===================== REVENUE =====================
 function RevenuePage({ user }) {
   const [sessions, setSessions] = useState([]);
   const [subs, setSubs] = useState([]);
 
   useEffect(() => {
-    const u1 = onValue(ref(db, `sessions_${user.shopId}`), snap => setSessions(snap.exists() ? Object.values(snap.val()) : []));
-    const u2 = onValue(ref(db, `subs_${user.shopId}`), snap => setSubs(snap.exists() ? Object.values(snap.val()) : []));
+    const u1 = onValue(ref(db,`sessions_${user.shopId}`), snap=>setSessions(snap.exists()?Object.values(snap.val()):[]));
+    const u2 = onValue(ref(db,`subs_${user.shopId}`), snap=>setSubs(snap.exists()?Object.values(snap.val()):[]));
     return () => { u1(); u2(); };
   }, []);
 
-  const days = Array.from({ length: 7 }, (_, i) => { const d = getNow(); d.setDate(d.getDate() - (6 - i)); return d.toISOString().slice(0, 10); });
-  const dailyRevenue = days.map(d => ({ label: new Date(d).toLocaleDateString("ar-EG", { weekday: "short" }), value: sessions.filter(s => s.date === d).reduce((sum, s) => sum + (s.amount || 0), 0) }));
-  const maxVal = Math.max(...dailyRevenue.map(d => d.value), 1);
-  const monthSessions = sessions.filter(s => s.date?.startsWith(thisMonth()));
-  const monthRevenue = monthSessions.reduce((s, x) => s + (x.amount || 0), 0);
-  const subRevenue = subs.filter(s => s.month === thisMonth()).reduce((s, x) => s + x.price, 0);
-  const byMethod = PAYMENT_METHODS.map(pm => ({ ...pm, total: monthSessions.filter(s => s.paymentMethod === pm.id).reduce((sum, s) => sum + s.amount, 0) })).filter(pm => pm.total > 0);
+  const days = Array.from({length:7},(_,i)=>{ const d=getNow(); d.setDate(d.getDate()-(6-i)); return d.toISOString().slice(0,10); });
+  const dailyRevenue = days.map(d=>({ label:new Date(d).toLocaleDateString("ar-EG",{weekday:"short"}), value:sessions.filter(s=>s.date===d).reduce((sum,s)=>sum+(s.amount||0),0) }));
+  const maxVal = Math.max(...dailyRevenue.map(d=>d.value),1);
+  const monthSessions = sessions.filter(s=>s.date?.startsWith(thisMonth()));
+  const monthRevenue = monthSessions.reduce((s,x)=>s+(x.amount||0),0);
+  const subRevenue = subs.filter(s=>s.month===thisMonth()).reduce((s,x)=>s+x.price,0);
+  const byMethod = PAYMENT_METHODS.map(pm=>({ ...pm, total:monthSessions.filter(s=>s.paymentMethod===pm.id).reduce((sum,s)=>sum+s.amount,0) })).filter(pm=>pm.total>0);
 
   return (
     <div className="fade-in">
@@ -1032,16 +998,16 @@ function RevenuePage({ user }) {
         <StatCard icon="✂️" value={monthSessions.length} label="جلسة الشهر" cls="stat-green" />
       </div>
       <div className="revenue-total">
-        <div><div className="text-sm" style={{ opacity: 0.6 }}>إجمالي الشهر</div><div className="amount">{monthRevenue + subRevenue} جنيه</div></div>
-        <div className="text-sm" style={{ opacity: 0.5 }}>{thisMonth()}</div>
+        <div><div className="text-sm" style={{opacity:0.6}}>إجمالي الشهر</div><div className="amount">{monthRevenue+subRevenue} جنيه</div></div>
+        <div className="text-sm" style={{opacity:0.5}}>{thisMonth()}</div>
       </div>
       <div className="card mb-24">
         <div className="card-title">📈 آخر 7 أيام</div>
         <div className="bar-chart">
-          {dailyRevenue.map((d, i) => (
+          {dailyRevenue.map((d,i)=>(
             <div key={i} className="bar-wrap">
-              <div style={{ flex: 1, display: "flex", alignItems: "flex-end", width: "100%" }}>
-                <div className="bar" style={{ height: `${(d.value / maxVal) * 100}%`, background: i === 6 ? "var(--gold2)" : "var(--gold)" }} />
+              <div style={{flex:1,display:"flex",alignItems:"flex-end",width:"100%"}}>
+                <div className="bar" style={{height:`${(d.value/maxVal)*100}%`,background:i===6?"var(--gold2)":"var(--gold)"}} />
               </div>
               <span className="bar-label">{d.label}</span>
             </div>
@@ -1051,9 +1017,9 @@ function RevenuePage({ user }) {
       {byMethod.length > 0 && (
         <div className="card">
           <div className="card-title">💳 حسب طريقة الدفع</div>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {byMethod.map(pm => (
-              <div key={pm.id} className="stat-card stat-gold" style={{ flex: "1 1 140px" }}>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+            {byMethod.map(pm=>(
+              <div key={pm.id} className="stat-card stat-gold" style={{flex:"1 1 140px"}}>
                 <span className="stat-icon">{pm.icon}</span>
                 <div><div className="stat-value">{pm.total} ج</div><div className="stat-label">{pm.label}</div></div>
               </div>
@@ -1065,33 +1031,33 @@ function RevenuePage({ user }) {
   );
 }
 
-// SHOPS (SUPERADMIN)
+// ===================== SHOPS (SUPERADMIN) =====================
 function ShopsPage({ showMsg }) {
   const [shops, setShops] = useState([]);
   useEffect(() => {
-    const unsub = onValue(ref(db, "shops"), snap => setShops(snap.exists() ? Object.values(snap.val()) : []));
+    const unsub = onValue(ref(db,"shops"), snap=>setShops(snap.exists()?Object.values(snap.val()):[]));
     return () => unsub();
   }, []);
   const toggle = async (id, current) => {
-    await update(ref(db, `shops/${id}`), { active: !current });
+    await update(ref(db,`shops/${id}`), { active:!current });
     showMsg("تم التحديث ✓");
   };
   return (
     <div className="fade-in">
       <div className="page-header"><h1>إدارة الصالونات</h1><p>{shops.length} صالون</p></div>
       <div className="card">
-        {shops.length === 0 ? <EmptyState icon="🏪" text="لا يوجد صالونات" /> : (
+        {shops.length===0 ? <EmptyState icon="🏪" text="لا يوجد صالونات" /> : (
           <div className="table-wrap">
             <table>
               <thead><tr><th>الصالون</th><th>صاحب الصالون</th><th>تاريخ الإنشاء</th><th>الحالة</th><th>إجراء</th></tr></thead>
               <tbody>
-                {shops.map(s => (
+                {shops.map(s=>(
                   <tr key={s.id}>
                     <td className="font-bold">✂️ {s.name}</td>
                     <td>{s.ownerName}</td>
                     <td className="text-muted text-sm">{s.createdAt}</td>
-                    <td><span className={`badge ${s.active ? "badge-green" : "badge-red"}`}>{s.active ? "نشط" : "موقوف"}</span></td>
-                    <td><button className={`btn btn-sm ${s.active ? "btn-danger" : "btn-success"}`} onClick={() => toggle(s.id, s.active)}>{s.active ? "إيقاف" : "تفعيل"}</button></td>
+                    <td><span className={`badge ${s.active?"badge-green":"badge-red"}`}>{s.active?"نشط":"موقوف"}</span></td>
+                    <td><button className={`btn btn-sm ${s.active?"btn-danger":"btn-success"}`} onClick={()=>toggle(s.id,s.active)}>{s.active?"إيقاف":"تفعيل"}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1103,7 +1069,7 @@ function ShopsPage({ showMsg }) {
   );
 }
 
-// USERS (SUPERADMIN)
+// ===================== USERS (SUPERADMIN) =====================
 function UsersPage({ showMsg }) {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
@@ -1111,19 +1077,19 @@ function UsersPage({ showMsg }) {
   const [shops, setShops] = useState([]);
 
   useEffect(() => {
-    const u1 = onValue(ref(db, "users"), snap => setUsers(snap.exists() ? Object.values(snap.val()) : []));
-    const u2 = onValue(ref(db, "shops"), snap => setShops(snap.exists() ? Object.values(snap.val()) : []));
+    const u1 = onValue(ref(db,"users"), snap=>setUsers(snap.exists()?Object.values(snap.val()):[]));
+    const u2 = onValue(ref(db,"shops"), snap=>setShops(snap.exists()?Object.values(snap.val()):[]));
     return () => { u1(); u2(); };
   }, []);
 
   const toggleActive = async (u) => {
-    if (u.role === "superadmin") { showMsg("لا يمكن تعطيل Super Admin", "error"); return; }
-    await update(ref(db, `users/${u.id}`), { active: !(u.active !== false) });
+    if (u.role==="superadmin") { showMsg("لا يمكن تعطيل Super Admin","error"); return; }
+    await update(ref(db,`users/${u.id}`), { active:!(u.active!==false) });
     showMsg("تم التحديث ✓");
   };
 
-  const filtered = users.filter(u => u.name?.toLowerCase().includes(search.toLowerCase()) || u.username?.toLowerCase().includes(search.toLowerCase()));
-  const roleLabel = { superadmin: "Super Admin", owner: "صاحب صالون", manager: "مدير", barber: "حلاق" };
+  const filtered = users.filter(u=>u.name?.toLowerCase().includes(search.toLowerCase())||u.username?.toLowerCase().includes(search.toLowerCase()));
+  const roleLabel = {superadmin:"Super Admin",owner:"صاحب صالون",manager:"مدير",barber:"حلاق"};
 
   return (
     <div className="fade-in">
@@ -1131,7 +1097,7 @@ function UsersPage({ showMsg }) {
       <div className="card mb-24">
         <div className="search-wrap">
           <span className="search-icon">🔍</span>
-          <input className="search-input" value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث..." />
+          <input className="search-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="بحث..." />
         </div>
       </div>
       <div className="card">
@@ -1139,25 +1105,25 @@ function UsersPage({ showMsg }) {
           <table>
             <thead><tr><th>الاسم</th><th>الدور</th><th>اسم المستخدم</th><th>كلمة المرور</th><th>الصالون</th><th>الحالة</th><th>إجراء</th></tr></thead>
             <tbody>
-              {filtered.map(u => {
-                const shopName = u.shopId ? shops.find(s => s.id === u.shopId)?.name : "—";
+              {filtered.map(u=>{
+                const shopName = u.shopId ? shops.find(s=>s.id===u.shopId)?.name : "—";
                 const active = u.active !== false;
                 return (
                   <tr key={u.id}>
                     <td className="font-bold">{u.name}</td>
-                    <td><span className="badge badge-gray">{roleLabel[u.role] || u.role}</span></td>
+                    <td><span className="badge badge-gray">{roleLabel[u.role]||u.role}</span></td>
                     <td className="text-muted">{u.username}</td>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontFamily: "monospace", fontSize: 13 }}>{showPass[u.id] ? u.password : "••••••"}</span>
-                        <button className="btn btn-outline btn-sm" style={{ padding: "4px 8px" }} onClick={() => setShowPass(p => ({ ...p, [u.id]: !p[u.id] }))}>
-                          {showPass[u.id] ? "إخفاء" : "إظهار"}
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontFamily:"monospace",fontSize:13}}>{showPass[u.id]?u.password:"••••••"}</span>
+                        <button className="btn btn-outline btn-sm" style={{padding:"4px 8px"}} onClick={()=>setShowPass(p=>({...p,[u.id]:!p[u.id]}))}>
+                          {showPass[u.id]?"إخفاء":"إظهار"}
                         </button>
                       </div>
                     </td>
                     <td className="text-muted text-sm">{shopName}</td>
-                    <td><span className={`badge ${active ? "badge-green" : "badge-red"}`}>{active ? "نشط" : "موقوف"}</span></td>
-                    <td>{u.role !== "superadmin" && <button className={`btn btn-sm ${active ? "btn-warning" : "btn-success"}`} onClick={() => toggleActive(u)}>{active ? "تعطيل" : "تفعيل"}</button>}</td>
+                    <td><span className={`badge ${active?"badge-green":"badge-red"}`}>{active?"نشط":"موقوف"}</span></td>
+                    <td>{u.role!=="superadmin"&&<button className={`btn btn-sm ${active?"btn-warning":"btn-success"}`} onClick={()=>toggleActive(u)}>{active?"تعطيل":"تفعيل"}</button>}</td>
                   </tr>
                 );
               })}
@@ -1169,69 +1135,69 @@ function UsersPage({ showMsg }) {
   );
 }
 
-// SETTINGS
+// ===================== SETTINGS =====================
 function SettingsPage({ user, showMsg }) {
-  const [pass, setPass] = useState({ current: "", newPass: "", confirm: "" });
+  const [pass, setPass] = useState({ current:"", newPass:"", confirm:"" });
   const changePass = async () => {
     const userData = await fbGet(`users/${user.id}`);
-    if (userData.password !== pass.current) { showMsg("كلمة المرور الحالية غلط", "error"); return; }
-    if (pass.newPass !== pass.confirm) { showMsg("كلمة المرور مش متطابقة", "error"); return; }
-    if (pass.newPass.length < 4) { showMsg("كلمة المرور قصيرة جداً", "error"); return; }
-    await update(ref(db, `users/${user.id}`), { password: pass.newPass });
-    setPass({ current: "", newPass: "", confirm: "" });
+    if (userData.password !== pass.current) { showMsg("كلمة المرور الحالية غلط","error"); return; }
+    if (pass.newPass !== pass.confirm) { showMsg("كلمة المرور مش متطابقة","error"); return; }
+    if (pass.newPass.length < 4) { showMsg("كلمة المرور قصيرة جداً","error"); return; }
+    await update(ref(db,`users/${user.id}`), { password:pass.newPass });
+    setPass({current:"",newPass:"",confirm:""});
     showMsg("تم التغيير ✓");
   };
   return (
     <div className="fade-in">
       <div className="page-header"><h1>الإعدادات</h1></div>
-      <div className="card" style={{ maxWidth: 480 }}>
+      <div className="card" style={{maxWidth:480}}>
         <div className="card-title">🔐 تغيير كلمة المرور</div>
-        <div className="form-group"><label>الحالية</label><input type="password" value={pass.current} onChange={e => setPass(p => ({ ...p, current: e.target.value }))} /></div>
-        <div className="form-group"><label>الجديدة</label><input type="password" value={pass.newPass} onChange={e => setPass(p => ({ ...p, newPass: e.target.value }))} /></div>
-        <div className="form-group"><label>تأكيد</label><input type="password" value={pass.confirm} onChange={e => setPass(p => ({ ...p, confirm: e.target.value }))} /></div>
+        <div className="form-group"><label>الحالية</label><input type="password" value={pass.current} onChange={e=>setPass(p=>({...p,current:e.target.value}))} /></div>
+        <div className="form-group"><label>الجديدة</label><input type="password" value={pass.newPass} onChange={e=>setPass(p=>({...p,newPass:e.target.value}))} /></div>
+        <div className="form-group"><label>تأكيد</label><input type="password" value={pass.confirm} onChange={e=>setPass(p=>({...p,confirm:e.target.value}))} /></div>
         <button className="btn btn-primary" onClick={changePass}>تحديث</button>
       </div>
     </div>
   );
 }
 
-// DASHBOARD
+// ===================== DASHBOARD =====================
 function DashboardPage({ user }) {
   const [sessions, setSessions] = useState([]);
   const [clients, setClients] = useState([]);
   const [shops, setShops] = useState([]);
 
   useEffect(() => {
-    if (user.role === "superadmin") {
-      const unsub = onValue(ref(db, "shops"), snap => setShops(snap.exists() ? Object.values(snap.val()) : []));
+    if (user.role==="superadmin") {
+      const unsub = onValue(ref(db,"shops"), snap=>setShops(snap.exists()?Object.values(snap.val()):[]));
       return () => unsub();
     } else {
-      const u1 = onValue(ref(db, `sessions_${user.shopId}`), snap => setSessions(snap.exists() ? Object.values(snap.val()) : []));
-      const u2 = onValue(ref(db, `clients_${user.shopId}`), snap => setClients(snap.exists() ? Object.values(snap.val()) : []));
+      const u1 = onValue(ref(db,`sessions_${user.shopId}`), snap=>setSessions(snap.exists()?Object.values(snap.val()):[]));
+      const u2 = onValue(ref(db,`clients_${user.shopId}`), snap=>setClients(snap.exists()?Object.values(snap.val()):[]));
       return () => { u1(); u2(); };
     }
   }, []);
 
-  const todaySessions = sessions.filter(s => s.date === today());
-  const monthSessions = sessions.filter(s => s.date?.startsWith(thisMonth()));
-  const todayRevenue = todaySessions.reduce((sum, s) => sum + (s.amount || 0), 0);
-  const monthRevenue = monthSessions.reduce((sum, s) => sum + (s.amount || 0), 0);
+  const todaySessions = sessions.filter(s=>s.date===today());
+  const monthSessions = sessions.filter(s=>s.date?.startsWith(thisMonth()));
+  const todayRevenue = todaySessions.reduce((sum,s)=>sum+(s.amount||0),0);
+  const monthRevenue = monthSessions.reduce((sum,s)=>sum+(s.amount||0),0);
 
-  if (user.role === "barber") {
-    const mine = sessions.filter(s => s.barberId === user.id);
+  if (user.role==="barber") {
+    const mine = sessions.filter(s=>s.barberId===user.id);
     return (
       <div className="fade-in">
-        <div className="page-header"><h1>أهلاً، {user.name}! 👋</h1><div className="datetime-badge" style={{ marginTop: 8 }}>🕐 {today()} — {getTime()}</div></div>
+        <div className="page-header"><h1>أهلاً، {user.name}! 👋</h1><div className="datetime-badge" style={{marginTop:8}}>🕐 {today()} — {getTime()}</div></div>
         <div className="stats-grid">
-          <StatCard icon="✂️" value={mine.filter(s => s.date === today()).length} label="حلاقة اليوم" cls="stat-gold" />
-          <StatCard icon="📅" value={mine.filter(s => s.date?.startsWith(thisMonth())).length} label="حلاقة الشهر" cls="stat-blue" />
+          <StatCard icon="✂️" value={mine.filter(s=>s.date===today()).length} label="حلاقة اليوم" cls="stat-gold" />
+          <StatCard icon="📅" value={mine.filter(s=>s.date?.startsWith(thisMonth())).length} label="حلاقة الشهر" cls="stat-blue" />
         </div>
         <div className="card">
           <div className="card-title">آخر جلساتي اليوم</div>
-          {mine.filter(s => s.date === today()).length === 0 ? <EmptyState icon="✂️" text="لا يوجد جلسات اليوم" /> :
-            mine.filter(s => s.date === today()).slice().reverse().map((s, i) => (
+          {mine.filter(s=>s.date===today()).length===0 ? <EmptyState icon="✂️" text="لا يوجد جلسات اليوم" /> :
+            mine.filter(s=>s.date===today()).slice().reverse().map((s,i)=>(
               <div key={i} className="log-entry">
-                <div><span className="font-bold">{s.serviceNames}</span><div className="text-xs text-muted">{s.clientName || "عميل عادي"} · {s.time}</div></div>
+                <div><span className="font-bold">{s.serviceNames}</span><div className="text-xs text-muted">{s.clientName||"عميل عادي"} · {s.time}</div></div>
                 <span className="badge badge-gold">{s.amount} ج</span>
               </div>
             ))}
@@ -1243,30 +1209,30 @@ function DashboardPage({ user }) {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1>{user.role === "superadmin" ? "لوحة تحكم BarberOS" : `لوحة التحكم`}</h1>
-        <div className="flex-gap" style={{ marginTop: 8 }}>
-          <p className="text-muted text-sm">{new Date().toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+        <h1>{user.role==="superadmin"?"لوحة تحكم BarberOS":"لوحة التحكم"}</h1>
+        <div className="flex-gap" style={{marginTop:8}}>
+          <p className="text-muted text-sm">{new Date().toLocaleDateString("ar-EG",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</p>
           <div className="datetime-badge">🕐 {getTime()}</div>
         </div>
       </div>
       <div className="stats-grid">
-        {user.role !== "superadmin" && <>
+        {user.role!=="superadmin" && <>
           <StatCard icon="💵" value={`${todayRevenue} ج`} label="إيرادات اليوم" cls="stat-gold" />
           <StatCard icon="📅" value={`${monthRevenue} ج`} label="إيرادات الشهر" cls="stat-green" />
           <StatCard icon="✂️" value={monthSessions.length} label="جلسة الشهر" cls="stat-blue" />
           <StatCard icon="👥" value={clients.length} label="عميل مسجل" cls="stat-red" />
         </>}
-        {user.role === "superadmin" && <StatCard icon="🏪" value={shops.length} label="صالون مسجل" cls="stat-gold" />}
+        {user.role==="superadmin" && <StatCard icon="🏪" value={shops.length} label="صالون مسجل" cls="stat-gold" />}
       </div>
-      {user.role === "owner" && todaySessions.length > 0 && (
+      {user.role==="owner" && todaySessions.length>0 && (
         <div className="card">
           <div className="card-title">📋 آخر الجلسات اليوم</div>
-          {todaySessions.slice(-5).reverse().map((s, i) => (
+          {todaySessions.slice(-5).reverse().map((s,i)=>(
             <div key={i} className="log-entry">
               <div>
                 <span className="font-bold">{s.serviceNames}</span>
-                {s.clientName && <span className="text-xs text-muted" style={{ marginLeft: 8 }}>· {s.clientName}</span>}
-                <span className="text-xs text-muted" style={{ marginLeft: 8 }}>· {s.barberName} · {s.time}</span>
+                {s.clientName&&<span className="text-xs text-muted" style={{marginLeft:8}}>· {s.clientName}</span>}
+                <span className="text-xs text-muted" style={{marginLeft:8}}>· {s.barberName} · {s.time}</span>
               </div>
               <span className="badge badge-gold">{s.amount} ج</span>
             </div>
@@ -1277,7 +1243,7 @@ function DashboardPage({ user }) {
   );
 }
 
-// SHARED
+// ===================== SHARED =====================
 function StatCard({ icon, value, label, cls }) {
   return (
     <div className={`stat-card ${cls}`}>
@@ -1288,9 +1254,9 @@ function StatCard({ icon, value, label, cls }) {
 }
 function Modal({ title, onClose, children }) {
   return (
-    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal fade-in">
-        {title && <div className="modal-header"><h2 className="modal-title">{title}</h2><button className="modal-close" onClick={onClose}>✕</button></div>}
+        {title&&<div className="modal-header"><h2 className="modal-title">{title}</h2><button className="modal-close" onClick={onClose}>✕</button></div>}
         {children}
       </div>
     </div>
@@ -1299,3 +1265,7 @@ function Modal({ title, onClose, children }) {
 function EmptyState({ icon, text }) {
   return <div className="empty-state"><div className="empty-icon">{icon}</div><p>{text}</p></div>;
 }
+
+// ===================== MOUNT =====================
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<BarberOS />);
