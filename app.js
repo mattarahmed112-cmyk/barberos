@@ -652,6 +652,8 @@ function SubscriptionsPage({ user, showMsg }) {
   const [form, setForm]       = useState({ clientId:"", planId:"", payStatus:"full", paidAmount:"", paymentMethod:"cash" });
   const [planForm, setPlanForm] = useState({ name:"", price:"", sessions:"", durationDays:"30", editId:null });
   const [visitForm, setVisitForm] = useState({ subId:"", note:"", paid:false, paymentMethod:"cash" });
+  const [debtModal, setDebtModal] = useState(null); // sub object
+  const [debtForm, setDebtForm]   = useState({ amount:"", paymentMethod:"cash" });
 
   useEffect(() => {
     const u1 = onValue(ref(db,`shops/${user.shopId}/subscriptionPlans`), snap=>setPlans(snap.exists()?Object.values(snap.val()):[]));
@@ -703,7 +705,26 @@ function SubscriptionsPage({ user, showMsg }) {
     showMsg(debt>0 ? `تم الاشتراك ✓ — متبقي ${debt} ج دين` : "تم الاشتراك ودفع كامل ✓");
   };
 
-  // تسجيل زيارة اشتراك بدون خدمة
+  const payDebt = async () => {
+    const amount = Number(debtForm.amount);
+    if (!amount || amount <= 0) { showMsg("اكتب المبلغ","error"); return; }
+    if (amount > debtModal.debtAmount) { showMsg(`أقصى مبلغ هو ${debtModal.debtAmount} ج`,"error"); return; }
+    const newDebt = debtModal.debtAmount - amount;
+    const newPaid = (debtModal.paidAmount||0) + amount;
+    await update(ref(db,`subs_${user.shopId}/${debtModal.id}`), { debtAmount:newDebt, paidAmount:newPaid });
+    // سجل الدفع في الإيرادات
+    const sessId = "sess_"+Date.now();
+    await fbSet(`sessions_${user.shopId}/${sessId}`, {
+      id:sessId, date:today(), time:getTime(),
+      serviceNames:`تسديد دين — ${debtModal.planName}`,
+      barberId:user.id, barberName:user.name,
+      amount, paymentMethod:debtForm.paymentMethod,
+      clientId:debtModal.clientId, clientName:debtModal.clientName,
+      isDebtPayment:true
+    });
+    setDebtModal(null); setDebtForm({amount:"",paymentMethod:"cash"});
+    showMsg(newDebt===0 ? "تم تسديد الدين كامل ✓" : `تم تسجيل ${amount} ج — متبقي دين ${newDebt} ج`);
+  };
   const registerVisit = async () => {
     if (!visitForm.subId) { showMsg("اختار الاشتراك","error"); return; }
     const sub = subs.find(s=>s.id===visitForm.subId);
@@ -792,7 +813,14 @@ function SubscriptionsPage({ user, showMsg }) {
                       </td>
                       <td>
                         <span className="badge badge-green">{s.paidAmount||s.price} ج</span>
-                        {s.debtAmount>0 && <div className="text-xs text-red">دين: {s.debtAmount} ج</div>}
+                        {s.debtAmount>0 && (
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                            <span className="text-xs text-red">دين: {s.debtAmount} ج</span>
+                            <button className="btn btn-warning btn-sm" style={{padding:"3px 8px",fontSize:11}} onClick={()=>{setDebtModal(s);setDebtForm({amount:s.debtAmount,paymentMethod:"cash"});}}>
+                              سدّد
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td className="text-muted text-sm">{s.startDate}</td>
                       <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
@@ -804,6 +832,42 @@ function SubscriptionsPage({ user, showMsg }) {
           </div>
         )}
       </div>
+
+      {/* تسديد دين */}
+      {debtModal && (
+        <Modal title="تسديد دين" onClose={()=>setDebtModal(null)}>
+          <div style={{background:"var(--cream2)",borderRadius:12,padding:"14px 18px",marginBottom:20}}>
+            <div className="font-bold">{debtModal.clientName}</div>
+            <div className="text-sm text-muted">{debtModal.planName}</div>
+            <div style={{marginTop:8,display:"flex",gap:16}}>
+              <div><div className="text-xs text-muted">إجمالي الباقة</div><div className="font-bold">{debtModal.price} ج</div></div>
+              <div><div className="text-xs text-muted">دفع قبل كده</div><div className="font-bold text-green">{debtModal.paidAmount||0} ج</div></div>
+              <div><div className="text-xs text-muted">الدين المتبقي</div><div className="font-bold text-red">{debtModal.debtAmount} ج</div></div>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>المبلغ اللي هيدفعه دلوقتي</label>
+            <input type="number" value={debtForm.amount} onChange={e=>setDebtForm(f=>({...f,amount:e.target.value}))} max={debtModal.debtAmount} />
+            <div className="chips" style={{marginTop:8}}>
+              <div className={`chip ${Number(debtForm.amount)===debtModal.debtAmount?"selected":""}`} onClick={()=>setDebtForm(f=>({...f,amount:debtModal.debtAmount}))}>كله — {debtModal.debtAmount} ج</div>
+            </div>
+          </div>
+          <div className="form-group">
+            <label>طريقة الدفع</label>
+            <div className="payment-methods">
+              {PAYMENT_METHODS.map(pm=>(
+                <div key={pm.id} className={`payment-chip ${debtForm.paymentMethod===pm.id?"selected":""}`} onClick={()=>setDebtForm(f=>({...f,paymentMethod:pm.id}))}>
+                  {pm.icon} {pm.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="flex-gap mt-16">
+            <button className="btn btn-primary" style={{flex:1}} onClick={payDebt}>تسجيل الدفع ✓</button>
+            <button className="btn btn-outline" onClick={()=>setDebtModal(null)}>إلغاء</button>
+          </div>
+        </Modal>
+      )}
 
       {/* تسجيل زيارة */}
       {modal==="visit" && (
