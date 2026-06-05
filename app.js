@@ -649,7 +649,7 @@ function SubscriptionsPage({ user, showMsg }) {
   const [clients, setClients] = useState([]);
   const [modal, setModal]     = useState(null);
   const [search, setSearch]   = useState("");
-  const [form, setForm]       = useState({ clientId:"", planId:"" });
+  const [form, setForm]       = useState({ clientId:"", planId:"", payStatus:"full", paidAmount:"", paymentMethod:"cash" });
   const [planForm, setPlanForm] = useState({ name:"", price:"", sessions:"", durationDays:"30", editId:null });
   const [visitForm, setVisitForm] = useState({ subId:"", note:"", paid:false, paymentMethod:"cash" });
 
@@ -675,16 +675,32 @@ function SubscriptionsPage({ user, showMsg }) {
     if (!form.planId||!form.clientId) { showMsg("اختار العميل والباقة","error"); return; }
     const plan   = plans.find(p=>p.id===form.planId);
     const client = clients.find(c=>c.id===form.clientId);
+    const paid   = form.payStatus==="full" ? plan.price : form.payStatus==="partial" ? Number(form.paidAmount||0) : 0;
+    const debt   = plan.price - paid;
     const id = "sub_"+Date.now();
     await fbSet(`subs_${user.shopId}/${id}`, {
       id, clientId:client.id, clientName:client.name, phone:client.phone||"",
       planId:form.planId, planName:plan.name, price:plan.price,
+      paidAmount:paid, debtAmount:debt,
+      paymentMethod: paid>0 ? form.paymentMethod : null,
       totalSessions:plan.sessions, remaining:plan.sessions,
       durationDays:plan.durationDays||30,
       startDate:today(), createdAt:today()
     });
-    setModal(null); setForm({clientId:"",planId:""});
-    showMsg("تم الاشتراك ✓");
+    // سجل الإيراد بس اللي اتدفع فعلاً
+    if (paid > 0) {
+      const sessId = "sess_"+Date.now();
+      await fbSet(`sessions_${user.shopId}/${sessId}`, {
+        id:sessId, date:today(), time:getTime(),
+        serviceNames:`اشتراك — ${plan.name}`,
+        barberId:user.id, barberName:user.name,
+        amount:paid, paymentMethod:form.paymentMethod,
+        clientId:client.id, clientName:client.name,
+        isSubscriptionPayment:true
+      });
+    }
+    setModal(null); setForm({clientId:"",planId:"",payStatus:"full",paidAmount:"",paymentMethod:"cash"});
+    showMsg(debt>0 ? `تم الاشتراك ✓ — متبقي ${debt} ج دين` : "تم الاشتراك ودفع كامل ✓");
   };
 
   // تسجيل زيارة اشتراك بدون خدمة
@@ -761,7 +777,7 @@ function SubscriptionsPage({ user, showMsg }) {
         {filtered.length===0 ? <EmptyState icon="🎫" text="لا يوجد اشتراكات" /> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>ID</th><th>العميل</th><th>الباقة</th><th>الجلسات</th><th>تاريخ البدء</th><th>الحالة</th></tr></thead>
+              <thead><tr><th>ID</th><th>العميل</th><th>الباقة</th><th>الجلسات</th><th>الدفع</th><th>تاريخ البدء</th><th>الحالة</th></tr></thead>
               <tbody>
                 {filtered.map(s=>{
                   const st = subStatus(s);
@@ -773,6 +789,10 @@ function SubscriptionsPage({ user, showMsg }) {
                       <td>
                         <span className={`font-bold ${s.remaining===0?"text-red":"text-green"}`}>{s.remaining}</span>
                         <span className="text-xs text-muted"> / {s.totalSessions}</span>
+                      </td>
+                      <td>
+                        <span className="badge badge-green">{s.paidAmount||s.price} ج</span>
+                        {s.debtAmount>0 && <div className="text-xs text-red">دين: {s.debtAmount} ج</div>}
                       </td>
                       <td className="text-muted text-sm">{s.startDate}</td>
                       <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
@@ -849,6 +869,48 @@ function SubscriptionsPage({ user, showMsg }) {
                   ))}
                 </div>}
           </div>
+          {form.planId && (
+            <>
+              <div className="form-group">
+                <label>حالة الدفع</label>
+                <div className="chips">
+                  <div className={`chip ${form.payStatus==="full"?"selected":""}`} onClick={()=>setForm(f=>({...f,payStatus:"full",paidAmount:""}))}>
+                    💰 دفع كامل — {plans.find(p=>p.id===form.planId)?.price} ج
+                  </div>
+                  <div className={`chip ${form.payStatus==="partial"?"selected":""}`} onClick={()=>setForm(f=>({...f,payStatus:"partial"}))}>
+                    💸 دفع جزئي
+                  </div>
+                  <div className={`chip ${form.payStatus==="none"?"selected":""}`} onClick={()=>setForm(f=>({...f,payStatus:"none",paidAmount:""}))}>
+                    ⏳ لسه مدفعش
+                  </div>
+                </div>
+              </div>
+              {form.payStatus==="partial" && (
+                <div className="form-group">
+                  <label>المبلغ المدفوع</label>
+                  <input type="number" value={form.paidAmount} onChange={e=>setForm(f=>({...f,paidAmount:e.target.value}))}
+                    placeholder={`من ${plans.find(p=>p.id===form.planId)?.price} ج`} />
+                  {form.paidAmount && (
+                    <div style={{marginTop:8,padding:"8px 12px",background:"var(--cream2)",borderRadius:8,fontSize:13}}>
+                      دفع: <strong>{form.paidAmount} ج</strong> — متبقي: <strong className="text-red">{plans.find(p=>p.id===form.planId)?.price - Number(form.paidAmount)} ج</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+              {form.payStatus !== "none" && (
+                <div className="form-group">
+                  <label>طريقة الدفع</label>
+                  <div className="payment-methods">
+                    {PAYMENT_METHODS.map(pm=>(
+                      <div key={pm.id} className={`payment-chip ${form.paymentMethod===pm.id?"selected":""}`} onClick={()=>setForm(f=>({...f,paymentMethod:pm.id}))}>
+                        {pm.icon} {pm.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
           <div className="flex-gap mt-16">
             <button className="btn btn-primary" style={{flex:1}} onClick={addSub} disabled={!form.planId||!form.clientId}>تأكيد</button>
             <button className="btn btn-outline" onClick={()=>setModal(null)}>إلغاء</button>
