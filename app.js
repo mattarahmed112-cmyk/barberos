@@ -626,6 +626,23 @@ function ServicesPage({ user, showMsg }) {
 }
 
 // ===================== SUBSCRIPTIONS =====================
+const isSubActive = (s) => {
+  if (!s) return false;
+  if (s.remaining <= 0) return false;
+  const expiry = new Date(s.startDate);
+  expiry.setDate(expiry.getDate() + (s.durationDays || 30));
+  return new Date(today()) <= expiry;
+};
+
+const subStatus = (s) => {
+  if (s.remaining <= 0) return { label:"استنفذت الجلسات", cls:"badge-red" };
+  const expiry = new Date(s.startDate);
+  expiry.setDate(expiry.getDate() + (s.durationDays || 30));
+  if (new Date(today()) > expiry) return { label:"انتهت المدة", cls:"badge-red" };
+  const daysLeft = Math.ceil((expiry - new Date(today())) / 86400000);
+  return { label:`نشط — ${daysLeft} يوم`, cls:"badge-green" };
+};
+
 function SubscriptionsPage({ user, showMsg }) {
   const [plans, setPlans]     = useState([]);
   const [subs, setSubs]       = useState([]);
@@ -633,7 +650,8 @@ function SubscriptionsPage({ user, showMsg }) {
   const [modal, setModal]     = useState(null);
   const [search, setSearch]   = useState("");
   const [form, setForm]       = useState({ clientId:"", planId:"" });
-  const [planForm, setPlanForm] = useState({ name:"", price:"", sessions:"", editId:null });
+  const [planForm, setPlanForm] = useState({ name:"", price:"", sessions:"", durationDays:"30", editId:null });
+  const [visitForm, setVisitForm] = useState({ subId:"", note:"", paid:false, paymentMethod:"cash" });
 
   useEffect(() => {
     const u1 = onValue(ref(db,`shops/${user.shopId}/subscriptionPlans`), snap=>setPlans(snap.exists()?Object.values(snap.val()):[]));
@@ -643,10 +661,13 @@ function SubscriptionsPage({ user, showMsg }) {
   }, []);
 
   const savePlan = async () => {
-    if (!planForm.name||!planForm.price||!planForm.sessions) { showMsg("ارجاء ملء كل الحقول","error"); return; }
+    if (!planForm.name||!planForm.price||!planForm.sessions||!planForm.durationDays) { showMsg("ارجاء ملء كل الحقول","error"); return; }
     const id = planForm.editId || "plan_"+Date.now();
-    await fbSet(`shops/${user.shopId}/subscriptionPlans/${id}`, { id, name:planForm.name, price:Number(planForm.price), sessions:Number(planForm.sessions) });
-    setModal(null); setPlanForm({name:"",price:"",sessions:"",editId:null});
+    await fbSet(`shops/${user.shopId}/subscriptionPlans/${id}`, {
+      id, name:planForm.name, price:Number(planForm.price),
+      sessions:Number(planForm.sessions), durationDays:Number(planForm.durationDays)
+    });
+    setModal(null); setPlanForm({name:"",price:"",sessions:"",durationDays:"30",editId:null});
     showMsg("تم حفظ الباقة ✓");
   };
 
@@ -655,23 +676,54 @@ function SubscriptionsPage({ user, showMsg }) {
     const plan   = plans.find(p=>p.id===form.planId);
     const client = clients.find(c=>c.id===form.clientId);
     const id = "sub_"+Date.now();
-    await fbSet(`subs_${user.shopId}/${id}`, { id, clientId:client.id, clientName:client.name, phone:client.phone||"", planId:form.planId, planName:plan.name, price:plan.price, totalSessions:plan.sessions, remaining:plan.sessions, month:thisMonth(), createdAt:today() });
+    await fbSet(`subs_${user.shopId}/${id}`, {
+      id, clientId:client.id, clientName:client.name, phone:client.phone||"",
+      planId:form.planId, planName:plan.name, price:plan.price,
+      totalSessions:plan.sessions, remaining:plan.sessions,
+      durationDays:plan.durationDays||30,
+      startDate:today(), createdAt:today()
+    });
     setModal(null); setForm({clientId:"",planId:""});
     showMsg("تم الاشتراك ✓");
   };
 
-  const thisMonthSubs = subs.filter(s=>s.month===thisMonth());
-  const filtered = subs.filter(s=>s.clientName?.toLowerCase().includes(search.toLowerCase())||s.clientId?.includes(search)).slice().reverse();
+  // تسجيل زيارة اشتراك بدون خدمة
+  const registerVisit = async () => {
+    if (!visitForm.subId) { showMsg("اختار الاشتراك","error"); return; }
+    const sub = subs.find(s=>s.id===visitForm.subId);
+    if (!isSubActive(sub)) { showMsg("الاشتراك منتهي","error"); return; }
+    await update(ref(db,`subs_${user.shopId}/${sub.id}`), { remaining: sub.remaining - 1 });
+    const sessId = "sess_"+Date.now();
+    await fbSet(`sessions_${user.shopId}/${sessId}`, {
+      id:sessId, date:today(), time:getTime(),
+      serviceNames: visitForm.paid ? "زيارة اشتراك (دفع إضافي)" : "زيارة اشتراك",
+      barberId:user.id, barberName:user.name,
+      amount: visitForm.paid ? (visitForm.extraAmount||0) : 0,
+      paymentMethod: visitForm.paid ? visitForm.paymentMethod : "subscription",
+      clientNote: visitForm.note,
+      clientId:sub.clientId, clientName:sub.clientName,
+      subId:sub.id, isSubscriptionVisit:true
+    });
+    setModal(null); setVisitForm({subId:"",note:"",paid:false,paymentMethod:"cash",extraAmount:""});
+    showMsg(`تم تسجيل الزيارة ✓ — متبقي ${sub.remaining-1} جلسة`);
+  };
+
+  const activeSubs  = subs.filter(s=>isSubActive(s));
+  const filtered    = subs.filter(s=>
+    s.clientName?.toLowerCase().includes(search.toLowerCase())||s.clientId?.includes(search)
+  ).slice().reverse();
 
   return (
     <div className="fade-in">
       <div className="page-header flex-between">
-        <div><h1>الاشتراكات الشهرية</h1></div>
+        <div><h1>الاشتراكات</h1></div>
         <div className="flex-gap">
-          <button className="btn btn-outline btn-sm" onClick={()=>{setPlanForm({name:"",price:"",sessions:"",editId:null});setModal("plan");}}>+ باقة</button>
+          <button className="btn btn-success btn-sm" onClick={()=>setModal("visit")}>✓ تسجيل زيارة</button>
+          <button className="btn btn-outline btn-sm" onClick={()=>{setPlanForm({name:"",price:"",sessions:"",durationDays:"30",editId:null});setModal("plan");}}>+ باقة</button>
           <button className="btn btn-primary" onClick={()=>setModal("add")}>+ اشتراك جديد</button>
         </div>
       </div>
+
       {plans.length>0 && (
         <div className="card mb-24">
           <div className="card-title">🎫 الباقات</div>
@@ -680,9 +732,10 @@ function SubscriptionsPage({ user, showMsg }) {
               <div key={p.id} className="card" style={{flex:"0 0 auto",minWidth:140,padding:"14px 18px",textAlign:"center"}}>
                 <div className="font-bold">{p.name}</div>
                 <div className="font-serif" style={{fontSize:22,color:"var(--gold)"}}>{p.price} ج</div>
-                <div className="text-xs text-muted">{p.sessions} جلسة / شهر</div>
+                <div className="text-xs text-muted">{p.sessions} جلسة</div>
+                <div className="text-xs text-muted">{p.durationDays||30} يوم</div>
                 <div className="flex-gap" style={{marginTop:8,justifyContent:"center"}}>
-                  <button className="btn btn-outline btn-sm" onClick={()=>{setPlanForm({name:p.name,price:p.price,sessions:p.sessions,editId:p.id});setModal("plan");}}>تعديل</button>
+                  <button className="btn btn-outline btn-sm" onClick={()=>{setPlanForm({name:p.name,price:p.price,sessions:p.sessions,durationDays:p.durationDays||30,editId:p.id});setModal("plan");}}>تعديل</button>
                   <button className="btn btn-danger btn-sm" onClick={()=>remove(ref(db,`shops/${user.shopId}/subscriptionPlans/${p.id}`))}>حذف</button>
                 </div>
               </div>
@@ -690,15 +743,17 @@ function SubscriptionsPage({ user, showMsg }) {
           </div>
         </div>
       )}
+
       <div className="stats-grid mb-24" style={{gridTemplateColumns:"repeat(3,1fr)"}}>
-        <StatCard icon="👥" value={thisMonthSubs.length} label="اشتراك الشهر" cls="stat-gold" />
-        <StatCard icon="✅" value={thisMonthSubs.filter(s=>s.remaining>0).length} label="نشط" cls="stat-green" />
-        <StatCard icon="💰" value={`${thisMonthSubs.reduce((s,x)=>s+x.price,0)} ج`} label="إيراد" cls="stat-blue" />
+        <StatCard icon="✅" value={activeSubs.length} label="اشتراك نشط" cls="stat-green" />
+        <StatCard icon="👥" value={subs.length} label="إجمالي الاشتراكات" cls="stat-gold" />
+        <StatCard icon="💰" value={`${subs.reduce((s,x)=>s+x.price,0)} ج`} label="إجمالي الإيراد" cls="stat-blue" />
       </div>
+
       <div className="card">
         <div className="flex-between mb-16">
           <div className="card-title" style={{marginBottom:0}}>سجل الاشتراكات</div>
-          <div className="search-wrap" style={{width:240}}>
+          <div className="search-wrap" style={{width:220}}>
             <span className="search-icon">🔍</span>
             <input className="search-input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="بحث..." />
           </div>
@@ -706,22 +761,73 @@ function SubscriptionsPage({ user, showMsg }) {
         {filtered.length===0 ? <EmptyState icon="🎫" text="لا يوجد اشتراكات" /> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>ID</th><th>العميل</th><th>الباقة</th><th>المتبقي</th><th>الشهر</th></tr></thead>
+              <thead><tr><th>ID</th><th>العميل</th><th>الباقة</th><th>الجلسات</th><th>تاريخ البدء</th><th>الحالة</th></tr></thead>
               <tbody>
-                {filtered.map(s=>(
-                  <tr key={s.id}>
-                    <td><span className="id-badge">{s.clientId}</span></td>
-                    <td className="font-bold">{s.clientName}</td>
-                    <td>{s.planName}<div className="text-xs text-muted">{s.price} ج</div></td>
-                    <td><span className={`font-bold ${s.remaining===0?"text-red":"text-green"}`}>{s.remaining}</span><span className="text-xs text-muted"> / {s.totalSessions}</span></td>
-                    <td className="text-muted text-sm">{s.month}</td>
-                  </tr>
-                ))}
+                {filtered.map(s=>{
+                  const st = subStatus(s);
+                  return (
+                    <tr key={s.id}>
+                      <td><span className="id-badge">{s.clientId}</span></td>
+                      <td className="font-bold">{s.clientName}</td>
+                      <td>{s.planName}<div className="text-xs text-muted">{s.price} ج · {s.durationDays||30} يوم</div></td>
+                      <td>
+                        <span className={`font-bold ${s.remaining===0?"text-red":"text-green"}`}>{s.remaining}</span>
+                        <span className="text-xs text-muted"> / {s.totalSessions}</span>
+                      </td>
+                      <td className="text-muted text-sm">{s.startDate}</td>
+                      <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* تسجيل زيارة */}
+      {modal==="visit" && (
+        <Modal title="✓ تسجيل زيارة اشتراك" onClose={()=>setModal(null)}>
+          <div className="form-group">
+            <label>اختار الزبون (الاشتراكات النشطة)</label>
+            {activeSubs.length===0
+              ? <p className="text-sm text-red">لا يوجد اشتراكات نشطة حالياً</p>
+              : <select value={visitForm.subId} onChange={e=>setVisitForm(f=>({...f,subId:e.target.value}))}>
+                  <option value="">— اختار —</option>
+                  {activeSubs.map(s=><option key={s.id} value={s.id}>#{s.clientId} {s.clientName} — {s.planName} ({s.remaining} جلسة متبقية)</option>)}
+                </select>}
+          </div>
+          <div className="form-group"><label>ملاحظة (اختياري)</label><input value={visitForm.note} onChange={e=>setVisitForm(f=>({...f,note:e.target.value}))} placeholder="مثلاً: قصة + لحية" /></div>
+          <div className="form-group">
+            <label>دفع إضافي؟</label>
+            <div className="chips">
+              <div className={`chip ${!visitForm.paid?"selected":""}`} onClick={()=>setVisitForm(f=>({...f,paid:false}))}>لأ — مشترك بالفعل</div>
+              <div className={`chip ${visitForm.paid?"selected":""}`} onClick={()=>setVisitForm(f=>({...f,paid:true}))}>أيوه — دفع إضافي</div>
+            </div>
+          </div>
+          {visitForm.paid && (
+            <>
+              <div className="form-group"><label>المبلغ الإضافي</label><input type="number" value={visitForm.extraAmount||""} onChange={e=>setVisitForm(f=>({...f,extraAmount:Number(e.target.value)}))} /></div>
+              <div className="form-group">
+                <label>طريقة الدفع</label>
+                <div className="payment-methods">
+                  {PAYMENT_METHODS.map(pm=>(
+                    <div key={pm.id} className={`payment-chip ${visitForm.paymentMethod===pm.id?"selected":""}`} onClick={()=>setVisitForm(f=>({...f,paymentMethod:pm.id}))}>
+                      {pm.icon} {pm.label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+          <div className="flex-gap mt-16">
+            <button className="btn btn-success" style={{flex:1}} onClick={registerVisit} disabled={!visitForm.subId}>تسجيل الزيارة ✓</button>
+            <button className="btn btn-outline" onClick={()=>setModal(null)}>إلغاء</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* اشتراك جديد */}
       {modal==="add" && (
         <Modal title="إضافة اشتراك" onClose={()=>setModal(null)}>
           <div className="form-group">
@@ -733,13 +839,15 @@ function SubscriptionsPage({ user, showMsg }) {
           </div>
           <div className="form-group">
             <label>الباقة</label>
-            <div className="chips">
-              {plans.map(p=>(
-                <div key={p.id} className={`chip ${form.planId===p.id?"selected":""}`} onClick={()=>setForm(f=>({...f,planId:p.id}))}>
-                  {p.name} — {p.price}ج
-                </div>
-              ))}
-            </div>
+            {plans.length===0
+              ? <p className="text-sm text-red">أضف باقة أولاً</p>
+              : <div className="chips">
+                  {plans.map(p=>(
+                    <div key={p.id} className={`chip ${form.planId===p.id?"selected":""}`} onClick={()=>setForm(f=>({...f,planId:p.id}))}>
+                      {p.name} — {p.price}ج ({p.sessions} جلسة / {p.durationDays||30} يوم)
+                    </div>
+                  ))}
+                </div>}
           </div>
           <div className="flex-gap mt-16">
             <button className="btn btn-primary" style={{flex:1}} onClick={addSub} disabled={!form.planId||!form.clientId}>تأكيد</button>
@@ -747,12 +855,25 @@ function SubscriptionsPage({ user, showMsg }) {
           </div>
         </Modal>
       )}
+
+      {/* باقة */}
       {modal==="plan" && (
         <Modal title={planForm.editId?"تعديل الباقة":"إضافة باقة"} onClose={()=>setModal(null)}>
           <div className="form-group"><label>اسم الباقة</label><input value={planForm.name} onChange={e=>setPlanForm(f=>({...f,name:e.target.value}))} /></div>
           <div className="grid-2">
-            <div className="form-group"><label>السعر</label><input type="number" value={planForm.price} onChange={e=>setPlanForm(f=>({...f,price:e.target.value}))} /></div>
+            <div className="form-group"><label>السعر (جنيه)</label><input type="number" value={planForm.price} onChange={e=>setPlanForm(f=>({...f,price:e.target.value}))} /></div>
             <div className="form-group"><label>عدد الجلسات</label><input type="number" value={planForm.sessions} onChange={e=>setPlanForm(f=>({...f,sessions:e.target.value}))} /></div>
+          </div>
+          <div className="form-group">
+            <label>مدة الاشتراك (أيام)</label>
+            <div className="chips">
+              {[7,14,30,60,90].map(d=>(
+                <div key={d} className={`chip ${planForm.durationDays==d?"selected":""}`} onClick={()=>setPlanForm(f=>({...f,durationDays:d}))}>
+                  {d===7?"أسبوع":d===14?"أسبوعين":d===30?"شهر":d===60?"شهرين":"3 شهور"}
+                </div>
+              ))}
+            </div>
+            <input type="number" style={{marginTop:8}} value={planForm.durationDays} onChange={e=>setPlanForm(f=>({...f,durationDays:e.target.value}))} placeholder="أو اكتب عدد الأيام يدوياً" />
           </div>
           <div className="flex-gap mt-16">
             <button className="btn btn-gold" style={{flex:1}} onClick={savePlan}>حفظ</button>
@@ -1076,15 +1197,36 @@ function RevenuePage({ user }) {
 function ShopsPage({ showMsg }) {
   const [shops, setShops] = useState([]);
   const [users, setUsers] = useState([]);
+  const [expiryModal, setExpiryModal] = useState(null);
+  const [expiryDate, setExpiryDate]   = useState("");
+
   useEffect(() => {
     const u1 = onValue(ref(db,"shops"), snap=>setShops(snap.exists()?Object.values(snap.val()):[]));
     const u2 = onValue(ref(db,"users"), snap=>setUsers(snap.exists()?Object.values(snap.val()):[]));
     return () => { u1(); u2(); };
   }, []);
+
   const toggle = async (id, current) => {
     await update(ref(db,`shops/${id}`), { active:!current });
     showMsg("تم التحديث ✓");
   };
+
+  const saveExpiry = async () => {
+    if (!expiryDate) { showMsg("اختار تاريخ","error"); return; }
+    await update(ref(db,`shops/${expiryModal}`), { expiryDate });
+    setExpiryModal(null); setExpiryDate("");
+    showMsg("تم تحديد تاريخ الانتهاء ✓");
+  };
+
+  const shopExpiry = (s) => {
+    if (!s.expiryDate) return null;
+    const days = Math.ceil((new Date(s.expiryDate) - new Date(today())) / 86400000);
+    if (days < 0) return { label:"منتهي", cls:"badge-red" };
+    if (days <= 7) return { label:`${days} يوم`, cls:"badge-red" };
+    if (days <= 30) return { label:`${days} يوم`, cls:"badge-gold" };
+    return { label:`${days} يوم`, cls:"badge-green" };
+  };
+
   return (
     <div className="fade-in">
       <div className="page-header"><h1>إدارة الصالونات</h1><p>{shops.length} صالون</p></div>
@@ -1092,18 +1234,24 @@ function ShopsPage({ showMsg }) {
         {shops.length===0 ? <EmptyState icon="🏪" text="لا يوجد صالونات" /> : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th>الصالون</th><th>صاحب الصالون</th><th>اسم المستخدم</th><th>الموظفين</th><th>تاريخ الإنشاء</th><th>الحالة</th><th>إجراء</th></tr></thead>
+              <thead><tr><th>الصالون</th><th>صاحب الصالون</th><th>اسم المستخدم</th><th>الموظفين</th><th>الاشتراك ينتهي</th><th>الحالة</th><th>إجراءات</th></tr></thead>
               <tbody>
                 {shops.map(s=>{
                   const owner = users.find(u=>u.role==="owner"&&u.shopId===s.id);
                   const count = users.filter(u=>(u.role==="barber"||u.role==="manager")&&u.shopId===s.id).length;
+                  const exp   = shopExpiry(s);
                   return (
                     <tr key={s.id}>
                       <td className="font-bold">✂️ {s.name}</td>
                       <td>{s.ownerName}</td>
                       <td className="text-muted">{owner?.username}</td>
                       <td><span className="badge badge-blue">{count}</span></td>
-                      <td className="text-muted text-sm">{s.createdAt}</td>
+                      <td>
+                        {exp
+                          ? <span className={`badge ${exp.cls}`}>{exp.label}</span>
+                          : <span className="text-muted text-xs">غير محدد</span>}
+                        <button className="btn btn-outline btn-sm" style={{marginRight:6}} onClick={()=>{setExpiryModal(s.id);setExpiryDate(s.expiryDate||"");}}>تحديد</button>
+                      </td>
                       <td><span className={`badge ${s.active?"badge-green":"badge-red"}`}>{s.active?"نشط":"موقوف"}</span></td>
                       <td><button className={`btn btn-sm ${s.active?"btn-danger":"btn-success"}`} onClick={()=>toggle(s.id,s.active)}>{s.active?"إيقاف":"تفعيل"}</button></td>
                     </tr>
@@ -1114,6 +1262,26 @@ function ShopsPage({ showMsg }) {
           </div>
         )}
       </div>
+
+      {expiryModal && (
+        <Modal title="تحديد تاريخ انتهاء الاشتراك" onClose={()=>setExpiryModal(null)}>
+          <div className="form-group">
+            <label>تاريخ الانتهاء</label>
+            <input type="date" value={expiryDate} onChange={e=>setExpiryDate(e.target.value)} min={today()} />
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+            {[30,90,180,365].map(d=>{
+              const dt = new Date(today()); dt.setDate(dt.getDate()+d);
+              const val = dt.toISOString().slice(0,10);
+              return <button key={d} className="btn btn-outline btn-sm" onClick={()=>setExpiryDate(val)}>{d===30?"شهر":d===90?"3 شهور":d===180?"6 شهور":"سنة"}</button>;
+            })}
+          </div>
+          <div className="flex-gap mt-16">
+            <button className="btn btn-primary" style={{flex:1}} onClick={saveExpiry}>حفظ</button>
+            <button className="btn btn-outline" onClick={()=>setExpiryModal(null)}>إلغاء</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
