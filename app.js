@@ -189,17 +189,37 @@ const css = `
   .pop-in { animation:popIn 0.4s cubic-bezier(0.175,0.885,0.32,1.275); }
   @media (max-width: 768px) {
     .mobile-header { display:flex; }
-    .sidebar { transform:translateX(-100%); }
+    .sidebar { transform:translateX(-100%); z-index:300; }
     .sidebar.open { transform:translateX(0); box-shadow:0 0 40px rgba(0,0,0,0.5); }
+    .sidebar-overlay { z-index:299; }
     .sidebar-overlay.open { display:block; }
-    .main { margin-left:0; padding:80px 16px 24px; }
+    .main { margin-left:0 !important; padding:72px 12px 24px; width:100%; max-width:100vw; overflow-x:hidden; }
     .stats-grid { grid-template-columns:1fr 1fr; }
     .grid-2 { grid-template-columns:1fr; }
-    .modal { padding:24px 16px; border-radius:20px 20px 0 0; }
+    .modal { padding:24px 16px; border-radius:20px 20px 0 0; max-width:100vw; }
     .modal-overlay { align-items:flex-end; padding:0; }
     .revenue-total { flex-direction:column; gap:8px; }
+    .page-header h1 { font-size:20px; }
+    .flex-between { flex-direction:row; }
+    .client-card { flex-direction:column; align-items:flex-start; }
+    table { min-width:480px; font-size:12px; }
+    thead th, tbody td { padding:8px 10px; }
+    .card { padding:16px; }
+    .card-title { font-size:15px; }
+    .stat-value { font-size:20px; }
+    .btn { font-size:13px; padding:10px 16px; }
+    .btn-sm { padding:6px 10px; font-size:11px; }
+    .id-badge { width:36px; height:24px; font-size:11px; }
+    .chips { gap:6px; }
+    .chip { font-size:12px; padding:5px 10px; }
+    .payment-methods { grid-template-columns:1fr 1fr; }
   }
-  @media (max-width: 480px) { .stats-grid { grid-template-columns:1fr; } }
+  @media (max-width: 480px) {
+    .stats-grid { grid-template-columns:1fr 1fr; }
+    .main { padding:68px 10px 20px; }
+    .modal { padding:20px 12px; }
+    .id-reveal-number { font-size:52px; }
+  }
 `;
 
 // ===================== APP =====================
