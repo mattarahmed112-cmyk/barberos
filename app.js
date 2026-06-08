@@ -232,7 +232,6 @@ function BarberOS() {
 
   useEffect(() => {
     const init = async () => {
-      // أنشئ Super Admin لو مش موجود
       const existing = await fbGet("users/superadmin");
       if (!existing) {
         await fbSet("users/superadmin", {
@@ -240,7 +239,6 @@ function BarberOS() {
           role: "superadmin", name: "Super Admin", active: true
         });
       }
-      // auto-login من الجهاز
       const saved = localStorage.getItem("barberos_session");
       if (saved) {
         try {
@@ -286,8 +284,6 @@ function BarberOS() {
 
   if (!currentUser) return (<><style>{css}</style><AuthPage onLogin={handleLogin} /></>);
 
-  const isSuspended = currentUser.shopId && currentUser.role !== "superadmin";
-
   return (
     <>
       <style>{css}</style>
@@ -318,7 +314,6 @@ function BarberOS() {
 
 // ===================== AUTH =====================
 function AuthPage({ onLogin }) {
-  const [signupDone, setSignupDone] = useState(false);
   const [tab, setTab]       = useState("login");
   const [form, setForm]     = useState({ username:"", password:"", shopName:"", ownerName:"" });
   const [err, setErr]       = useState("");
@@ -349,11 +344,12 @@ function AuthPage({ onLogin }) {
       if (userList.find(u => u.username === form.username)) { setErr("اسم المستخدم موجود بالفعل"); setLoading(false); return; }
       const shopId = "shop_" + Date.now();
       const userId = "u_" + Date.now();
-      // active: false — في انتظار موافقة Super Admin
       await fbSet(`shops/${shopId}`, { id:shopId, name:form.shopName, ownerName:form.ownerName, createdAt:today(), active:false, pending:true });
       const newUser = { id:userId, username:form.username, password:form.password, role:"owner", name:form.ownerName, shopId, active:false, pending:true };
       await fbSet(`users/${userId}`, newUser);
-      setSignupDone(true);
+      setTab("login");
+      setErr("");
+      setForm(x => ({ ...x, username:"", password:"" }));
     } catch(e) { setErr("حدث خطأ، حاول تاني"); }
     setLoading(false);
   };
@@ -655,7 +651,7 @@ function SubscriptionsPage({ user, showMsg }) {
   const [form, setForm]       = useState({ clientId:"", planId:"", payStatus:"full", paidAmount:"", paymentMethod:"cash" });
   const [planForm, setPlanForm] = useState({ name:"", price:"", sessions:"", durationDays:"30", editId:null });
   const [visitForm, setVisitForm] = useState({ subId:"", note:"", paid:false, paymentMethod:"cash" });
-  const [debtModal, setDebtModal] = useState(null); // sub object
+  const [debtModal, setDebtModal] = useState(null);
   const [debtForm, setDebtForm]   = useState({ amount:"", paymentMethod:"cash" });
 
   useEffect(() => {
@@ -692,7 +688,6 @@ function SubscriptionsPage({ user, showMsg }) {
       durationDays:plan.durationDays||30,
       startDate:today(), createdAt:today()
     });
-    // سجل الإيراد بس اللي اتدفع فعلاً
     if (paid > 0) {
       const sessId = "sess_"+Date.now();
       await fbSet(`sessions_${user.shopId}/${sessId}`, {
@@ -715,7 +710,6 @@ function SubscriptionsPage({ user, showMsg }) {
     const newDebt = debtModal.debtAmount - amount;
     const newPaid = (debtModal.paidAmount||0) + amount;
     await update(ref(db,`subs_${user.shopId}/${debtModal.id}`), { debtAmount:newDebt, paidAmount:newPaid });
-    // سجل الدفع في الإيرادات
     const sessId = "sess_"+Date.now();
     await fbSet(`sessions_${user.shopId}/${sessId}`, {
       id:sessId, date:today(), time:getTime(),
@@ -728,6 +722,7 @@ function SubscriptionsPage({ user, showMsg }) {
     setDebtModal(null); setDebtForm({amount:"",paymentMethod:"cash"});
     showMsg(newDebt===0 ? "تم تسديد الدين كامل ✓" : `تم تسجيل ${amount} ج — متبقي دين ${newDebt} ج`);
   };
+
   const registerVisit = async () => {
     if (!visitForm.subId) { showMsg("اختار الاشتراك","error"); return; }
     const sub = subs.find(s=>s.id===visitForm.subId);
@@ -836,7 +831,6 @@ function SubscriptionsPage({ user, showMsg }) {
         )}
       </div>
 
-      {/* تسديد دين */}
       {debtModal && (
         <Modal title="تسديد دين" onClose={()=>setDebtModal(null)}>
           <div style={{background:"var(--cream2)",borderRadius:12,padding:"14px 18px",marginBottom:20}}>
@@ -872,7 +866,6 @@ function SubscriptionsPage({ user, showMsg }) {
         </Modal>
       )}
 
-      {/* تسجيل زيارة */}
       {modal==="visit" && (
         <Modal title="✓ تسجيل زيارة اشتراك" onClose={()=>setModal(null)}>
           <div className="form-group">
@@ -914,7 +907,6 @@ function SubscriptionsPage({ user, showMsg }) {
         </Modal>
       )}
 
-      {/* اشتراك جديد */}
       {modal==="add" && (
         <Modal title="إضافة اشتراك" onClose={()=>setModal(null)}>
           <div className="form-group">
@@ -985,7 +977,6 @@ function SubscriptionsPage({ user, showMsg }) {
         </Modal>
       )}
 
-      {/* باقة */}
       {modal==="plan" && (
         <Modal title={planForm.editId?"تعديل الباقة":"إضافة باقة"} onClose={()=>setModal(null)}>
           <div className="form-group"><label>اسم الباقة</label><input value={planForm.name} onChange={e=>setPlanForm(f=>({...f,name:e.target.value}))} /></div>
@@ -1133,7 +1124,7 @@ function SessionsPage({ user, showMsg }) {
 
   const selectedServices = services.filter(s=>form.serviceIds.includes(s.id));
   const totalAmount      = selectedServices.reduce((sum,s)=>sum+s.price, 0);
-  const clientSubs       = form.clientId ? subs.filter(s=>s.clientId===form.clientId&&s.month===thisMonth()&&s.remaining>0) : [];
+  const clientSubs       = form.clientId ? subs.filter(s=>s.clientId===form.clientId&&s.remaining>0&&isSubActive(s)) : [];
   const toggleService    = (id) => setForm(f=>({ ...f, serviceIds: f.serviceIds.includes(id)?f.serviceIds.filter(x=>x!==id):[...f.serviceIds,id] }));
 
   const addSession = async () => {
@@ -1340,6 +1331,31 @@ function ShopsPage({ showMsg }) {
     showMsg("تم التحديث ✓");
   };
 
+  const deleteShop = async (shop) => {
+    if (!window.confirm(`⚠️ هتمسح "${shop.name}" وكل بياناته نهائياً؟\n\nكل العملاء والجلسات والاشتراكات والموظفين هتتمسح.\n\nمفيش رجعة!`)) return;
+    const shopId = shop.id;
+    try {
+      await Promise.all([
+        remove(ref(db, `clients_${shopId}`)),
+        remove(ref(db, `sessions_${shopId}`)),
+        remove(ref(db, `subs_${shopId}`)),
+        remove(ref(db, `shops/${shopId}/services`)),
+        remove(ref(db, `shops/${shopId}/subscriptionPlans`)),
+        remove(ref(db, `shops/${shopId}`)),
+      ]);
+      const allUsers = await fbGet("users");
+      if (allUsers) {
+        const deleteOps = Object.values(allUsers)
+          .filter(u => u.shopId === shopId)
+          .map(u => remove(ref(db, `users/${u.id}`)));
+        await Promise.all(deleteOps);
+      }
+      showMsg(`تم حذف "${shop.name}" وكل بياناته نهائياً ✓`);
+    } catch(e) {
+      showMsg("حدث خطأ أثناء الحذف","error");
+    }
+  };
+
   const saveExpiry = async () => {
     if (!expiryDate) { showMsg("اختار تاريخ","error"); return; }
     await update(ref(db,`shops/${expiryModal}`), { expiryDate });
@@ -1382,7 +1398,12 @@ function ShopsPage({ showMsg }) {
                         <button className="btn btn-outline btn-sm" style={{marginRight:6}} onClick={()=>{setExpiryModal(s.id);setExpiryDate(s.expiryDate||"");}}>تحديد</button>
                       </td>
                       <td><span className={`badge ${s.active?"badge-green":"badge-red"}`}>{s.active?"نشط":"موقوف"}</span></td>
-                      <td><button className={`btn btn-sm ${s.active?"btn-danger":"btn-success"}`} onClick={()=>toggle(s.id,s.active)}>{s.active?"إيقاف":"تفعيل"}</button></td>
+                      <td>
+                        <div className="flex-gap">
+                          <button className={`btn btn-sm ${s.active?"btn-warning":"btn-success"}`} onClick={()=>toggle(s.id,s.active)}>{s.active?"إيقاف":"تفعيل"}</button>
+                          <button className="btn btn-danger btn-sm" onClick={()=>deleteShop(s)}>🗑 حذف نهائي</button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
