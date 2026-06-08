@@ -333,7 +333,7 @@ function AuthPage({ onLogin }) {
       if (!users) { setErr("لا يوجد مستخدمين"); setLoading(false); return; }
       const user = Object.values(users).find(u => u.username === form.username && u.password === form.password);
       if (!user) { setErr("اسم المستخدم أو كلمة المرور غلط"); setLoading(false); return; }
-      if (user.pending) { setErr("حسابك في انتظار موافقة الإدارة. هنتواصل معاك قريباً ✓"); setLoading(false); return; }
+      if (user.pending === true) { setErr("حسابك في انتظار موافقة الإدارة ⏳"); setLoading(false); return; }
       if (user.active === false) { setErr("هذا الحساب موقوف. تواصل مع الإدارة."); setLoading(false); return; }
       onLogin(user, remember);
     } catch(e) { setErr("حدث خطأ، حاول تاني"); }
