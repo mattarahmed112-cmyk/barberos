@@ -318,6 +318,7 @@ function BarberOS() {
 
 // ===================== AUTH =====================
 function AuthPage({ onLogin }) {
+  const [signupDone, setSignupDone] = useState(false);
   const [tab, setTab]       = useState("login");
   const [form, setForm]     = useState({ username:"", password:"", shopName:"", ownerName:"" });
   const [err, setErr]       = useState("");
@@ -332,7 +333,8 @@ function AuthPage({ onLogin }) {
       if (!users) { setErr("لا يوجد مستخدمين"); setLoading(false); return; }
       const user = Object.values(users).find(u => u.username === form.username && u.password === form.password);
       if (!user) { setErr("اسم المستخدم أو كلمة المرور غلط"); setLoading(false); return; }
-      if (user.active === false) { setErr("هذا الحساب موقوف"); setLoading(false); return; }
+      if (user.pending) { setErr("حسابك في انتظار موافقة الإدارة. هنتواصل معاك قريباً ✓"); setLoading(false); return; }
+      if (user.active === false) { setErr("هذا الحساب موقوف. تواصل مع الإدارة."); setLoading(false); return; }
       onLogin(user, remember);
     } catch(e) { setErr("حدث خطأ، حاول تاني"); }
     setLoading(false);
@@ -347,10 +349,11 @@ function AuthPage({ onLogin }) {
       if (userList.find(u => u.username === form.username)) { setErr("اسم المستخدم موجود بالفعل"); setLoading(false); return; }
       const shopId = "shop_" + Date.now();
       const userId = "u_" + Date.now();
-      await fbSet(`shops/${shopId}`, { id:shopId, name:form.shopName, ownerName:form.ownerName, createdAt:today(), active:true });
-      const newUser = { id:userId, username:form.username, password:form.password, role:"owner", name:form.ownerName, shopId, active:true };
+      // active: false — في انتظار موافقة Super Admin
+      await fbSet(`shops/${shopId}`, { id:shopId, name:form.shopName, ownerName:form.ownerName, createdAt:today(), active:false, pending:true });
+      const newUser = { id:userId, username:form.username, password:form.password, role:"owner", name:form.ownerName, shopId, active:false, pending:true };
       await fbSet(`users/${userId}`, newUser);
-      onLogin(newUser, remember);
+      setSignupDone(true);
     } catch(e) { setErr("حدث خطأ، حاول تاني"); }
     setLoading(false);
   };
@@ -1540,7 +1543,7 @@ function DashboardPage({ user }) {
             mine.filter(s=>s.date===today()).slice().reverse().map((s,i)=>(
               <div key={i} className="log-entry">
                 <div><span className="font-bold">{s.serviceNames}</span><div className="text-xs text-muted">{s.clientName||"عميل عادي"} · {s.time}</div></div>
-                <span className="badge badge-gold">{s.amount} ج</span>
+                <span className="badge badge-gray">{s.time}</span>
               </div>
             ))}
         </div>
