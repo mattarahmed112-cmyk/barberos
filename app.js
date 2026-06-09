@@ -1331,6 +1331,19 @@ function ShopsPage({ showMsg }) {
     showMsg("تم التحديث ✓");
   };
 
+  const acceptShop = async (shop) => {
+    const shopId = shop.id;
+    // فعّل الصالون
+    await update(ref(db,`shops/${shopId}`), { active:true, pending:false });
+    // فعّل الـ owner بتاعه
+    const allUsers = await fbGet("users");
+    if (allUsers) {
+      const owner = Object.values(allUsers).find(u=>u.shopId===shopId&&u.role==="owner");
+      if (owner) await update(ref(db,`users/${owner.id}`), { active:true, pending:false });
+    }
+    showMsg(`تم قبول "${shop.name}" وتفعيله ✓`);
+  };
+
   const deleteShop = async (shop) => {
     if (!window.confirm(`⚠️ هتمسح "${shop.name}" وكل بياناته نهائياً؟\n\nكل العملاء والجلسات والاشتراكات والموظفين هتتمسح.\n\nمفيش رجعة!`)) return;
     const shopId = shop.id;
@@ -1397,10 +1410,13 @@ function ShopsPage({ showMsg }) {
                           : <span className="text-muted text-xs">غير محدد</span>}
                         <button className="btn btn-outline btn-sm" style={{marginRight:6}} onClick={()=>{setExpiryModal(s.id);setExpiryDate(s.expiryDate||"");}}>تحديد</button>
                       </td>
-                      <td><span className={`badge ${s.active?"badge-green":"badge-red"}`}>{s.active?"نشط":"موقوف"}</span></td>
+                      <td><span className={`badge ${s.pending?"badge-gold":s.active?"badge-green":"badge-red"}`}>{s.pending?"في انتظار القبول":s.active?"نشط":"موقوف"}</span></td>
                       <td>
                         <div className="flex-gap">
-                          <button className={`btn btn-sm ${s.active?"btn-warning":"btn-success"}`} onClick={()=>toggle(s.id,s.active)}>{s.active?"إيقاف":"تفعيل"}</button>
+                          {s.pending
+                            ? <button className="btn btn-success btn-sm" onClick={()=>acceptShop(s)}>✅ قبول وتفعيل</button>
+                            : <button className={`btn btn-sm ${s.active?"btn-warning":"btn-success"}`} onClick={()=>toggle(s.id,s.active)}>{s.active?"إيقاف":"تفعيل"}</button>
+                          }
                           <button className="btn btn-danger btn-sm" onClick={()=>deleteShop(s)}>🗑 حذف نهائي</button>
                         </div>
                       </td>
